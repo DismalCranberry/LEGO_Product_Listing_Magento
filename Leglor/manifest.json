@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Dormant LEGO Content Scraper",
+  "version": "1.2.1",
+  "action": {
+    "default_title": "Scrape LEGO content",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "128": "icons/bricked128.png"
+    }
+  },
+  "icons": {
+    "128": "icons/bricked128.png"
+  },
+  "permissions": ["tabs", "scripting", "downloads", "storage", "clipboardWrite"],
+  "host_permissions": ["https://content.lego.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://content.lego.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
