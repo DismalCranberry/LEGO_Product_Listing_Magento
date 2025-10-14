@@ -91,7 +91,7 @@ public class LegoCsvBuilderNoDeps {
             try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8); BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
                 bw.write("\uFEFF"); // UTF-8 BOM for Excel
 
-                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_leght", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact"};
+                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact"};
                 writeCsvLine(bw, header);
 
                 String record;
@@ -156,8 +156,7 @@ public class LegoCsvBuilderNoDeps {
         }
     }
 
-    // ==================== CSV Parsing =====================
-
+    // ==================== CSV Parsing ===================== \\
     private static void writeCsvLine(Writer w, String[] fields) throws IOException {
         for (int i = 0; i < fields.length; i++) {
             if (i > 0) w.write(',');
@@ -273,7 +272,7 @@ public class LegoCsvBuilderNoDeps {
         return out.toArray(new String[0]);
     }
 
-    // ==================== Utils & Transformers =====================
+    // ==================== Utils & Transformers ===================== \\
 
     private static Map<String, String> loadLegoToSku(Path magentoPath) throws IOException {
         Map<String, String> map = new HashMap<>();
@@ -349,7 +348,7 @@ public class LegoCsvBuilderNoDeps {
         }
     }
 
-    // ================ Series detection & normalization ================
+    // ================ Series detection & normalization ================ \\
 
     // Normalize for matching: lowercase, remove ™®©, unify hyphens/apostrophes to spaces, collapse spaces
     private static String normalizeForMatch(String s) {
