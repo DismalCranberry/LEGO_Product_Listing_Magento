@@ -20,7 +20,7 @@ public class LegoCsvBuilderNoDeps {
 
     private static final String MAGENTO_IMPORT_FILE = "C:\\Users\\kiril.stoyanov\\Desktop\\JavaProject\\LegoListingCreation\\res\\magento_import.csv";
     private static final String LEGO_SCRAPE_FILE = "C:\\Users\\kiril.stoyanov\\Desktop\\JavaProject\\LegoListingCreation\\res\\lego-scrape.csv";
-    private static final String OUTPUT_FILE = "output.csv";
+    private static final String OUTPUT_FILE = "LEGO_NEW_IMPORT.csv";
 
     private static final int IDX_B = 1;  // bulletpoints
     private static final int IDX_C = 2;  // description
@@ -33,9 +33,14 @@ public class LegoCsvBuilderNoDeps {
     private static final int IDX_Y = 24; // weight
 
     // Fixed categories value
-    private static final String CATEGORIES = "Default Category/Меню продукти/Детски играчки/LEGO," + "Default Category/Меню продукти/Детски играчки/LEGO/LEGO Super Heroes," + "Default Category," + "Default Category/Меню продукти," + "Default Category/Меню продукти/Детски играчки," + "Default Category/Ново," + "Default Category/Ново/Детски играчки - Ново";
+    private static final String CATEGORIES = "Default Category/Меню продукти/Детски играчки/LEGO," + "Default Category," + "Default Category/Меню продукти," + "Default Category/Меню продукти/Детски играчки," + "Default Category/Ново," + "Default Category/Ново/Детски играчки - Ново";
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    private static final String MANUFACTURER = "LEGO";
+    private static final String RESPONSIBLE_ENTITY_NAME = "LEGO System A/S";
+    private static final String RESPONSIBLE_ENTITY_ADDRESS = "Dinu Vintila Street 11 9th Fl 021101 Bucharest";
+    private static final String RESPONSIBLE_ENTITY_CONTACT = "lucretiu.dumitrescu@lego.com";
 
     // ===== Series list (preferred, as you provided) =====
     private static final String[] SERIES_LIST = new String[]{"LEGO Classic", "LEGO Architecture", "LEGO Creator", "LEGO City", "LEGO Super Heroes", "LEGO Boost", "LEGO Star Wars", "LEGO Duplo", "LEGO Friends", "LEGO Technic", "LEGO Minecraft", "LEGO Ninjago", "LEGO Juniors", "LEGO Speed Champions", "LEGO Overwatch", "LEGO The Movie", "LEGO Toy Story 4", "LEGO Spiderman", "LEGO Batman", "LEGO Jurassic World", "LEGO Hidden Side™", "LEGO Disney", "LEGO DOTS", "LEGO Trolls", "LEGO Super Mario", "LEGO ART", "LEGO Ideas", "LEGO Icons", "Disney Princess", "LEGO Harry Potter", "LEGO Vidiyo", "LEGO Minions", "LEGO Avatar", "LEGO Sonic", "LEGO DREAMZzz", "LEGO Gabby's Dollhouse", "LEGO Избрани", "LEGO Animal Crossing", "LEGO Fortnite", "LEGO Wednesday", "LEGO Horizon", "LEGO Wicked", "LEGO Despicable Me", "LEGO Botanicals", "LEGO Marvel", "LEGO Bluey", "LEGO One Piece"};
@@ -86,7 +91,7 @@ public class LegoCsvBuilderNoDeps {
             try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8); BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
                 bw.write("\uFEFF"); // UTF-8 BOM for Excel
 
-                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_leght", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date"};
+                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_leght", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact"};
                 writeCsvLine(bw, header);
 
                 String record;
@@ -141,7 +146,7 @@ public class LegoCsvBuilderNoDeps {
                     String heiCm = mmToCmString(safe(row, IDX_T));
                     String weight = safe(row, IDX_Y);
 
-                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, "9999", "0", "simple", "Default", CATEGORIES, newsFrom, newsTo};
+                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, "9999", "0", "simple", "Default", CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT};
                     writeCsvLine(bw, out);
                 }
             }
