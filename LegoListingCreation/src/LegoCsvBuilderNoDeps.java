@@ -64,6 +64,7 @@ public class LegoCsvBuilderNoDeps {
     private static final Pattern APOSTROPHES_AND_HYPHENS = Pattern.compile("[-‘’'`´–—]");
     private static final Pattern MULTISPACE = Pattern.compile("\\s{2,}");
     private static final Pattern AGE_PLUS = Pattern.compile("(\\d+)\\s*\\+");
+    private static final Pattern EXTRA_NAME_SYMBOLS = Pattern.compile("[:|,“”„ǀ]");
 
     // For series matching: normalized (lowercase, no symbols, spaces collapsed) -> preferred
     private static final Map<String, String> SERIES_NORM_TO_PREFERRED = new LinkedHashMap<>();
@@ -204,6 +205,7 @@ public class LegoCsvBuilderNoDeps {
     private static String stripSymbolsAndCollapse(String s) {
         if (s == null) return "";
         String out = TRADEMARKS.matcher(s).replaceAll("");
+        out = EXTRA_NAME_SYMBOLS.matcher(out).replaceAll(" ");
         out = out.replaceAll("[-‘’'`´–—]", " ");
         out = out.replaceAll("\\s+", " ").trim();
         return out;
@@ -325,6 +327,7 @@ public class LegoCsvBuilderNoDeps {
     private static String cleanName(String s) {
         if (s == null) return "";
         String out = TRADEMARKS.matcher(s).replaceAll("");
+        out = EXTRA_NAME_SYMBOLS.matcher(out).replaceAll(" ");
         out = APOSTROPHES_AND_HYPHENS.matcher(out).replaceAll(" ");
         out = MULTISPACE.matcher(out).replaceAll(" ").trim();
         return out;
@@ -355,6 +358,7 @@ public class LegoCsvBuilderNoDeps {
         if (s == null) return "";
         String out = s;
         out = TRADEMARKS.matcher(out).replaceAll("");
+        out = EXTRA_NAME_SYMBOLS.matcher(out).replaceAll(" ");
         out = APOSTROPHES_AND_HYPHENS.matcher(out).replaceAll(" ");
         out = out.toLowerCase(Locale.ROOT).trim();
         out = out.replaceAll("\\s+", " ");
