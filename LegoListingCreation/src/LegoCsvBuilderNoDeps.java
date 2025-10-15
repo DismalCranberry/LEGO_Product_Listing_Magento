@@ -14,9 +14,7 @@ import java.util.regex.Pattern;
 
 public class LegoCsvBuilderNoDeps {
 
-    private static boolean containsCyrillic(String s) {
-        return s != null && s.matches(".*\\p{IsCyrillic}.*");
-    }
+    private static boolean containsCyrillic(String s) {return s != null && s.matches(".*\\p{IsCyrillic}.*");}
 
     private static final String MAGENTO_IMPORT_FILE = "C:\\Users\\kiril.stoyanov\\Desktop\\JavaProject\\LegoListingCreation\\res\\magento_import.csv";
     private static final String LEGO_SCRAPE_FILE = "C:\\Users\\kiril.stoyanov\\Desktop\\JavaProject\\LegoListingCreation\\res\\lego-scrape.csv";
@@ -32,17 +30,15 @@ public class LegoCsvBuilderNoDeps {
     private static final int IDX_T = 19; // height
     private static final int IDX_Y = 24; // weight
 
-    // Fixed categories value
+    // Fixed values
     private static final String CATEGORIES = "Default Category/Меню продукти/Детски играчки/LEGO," + "Default Category," + "Default Category/Меню продукти," + "Default Category/Меню продукти/Детски играчки," + "Default Category/Ново," + "Default Category/Ново/Детски играчки - Ново";
-
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-
     private static final String MANUFACTURER = "LEGO";
     private static final String RESPONSIBLE_ENTITY_NAME = "LEGO System A/S";
     private static final String RESPONSIBLE_ENTITY_ADDRESS = "Dinu Vintila Street 11 9th Fl 021101 Bucharest";
     private static final String RESPONSIBLE_ENTITY_CONTACT = "lucretiu.dumitrescu@lego.com";
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    // ===== Series list (preferred, as you provided) =====
+    // Series list
     private static final String[] SERIES_LIST = new String[]{"LEGO Classic", "LEGO Architecture", "LEGO Creator", "LEGO City", "LEGO Super Heroes", "LEGO Boost", "LEGO Star Wars", "LEGO Duplo", "LEGO Friends", "LEGO Technic", "LEGO Minecraft", "LEGO Ninjago", "LEGO Juniors", "LEGO Speed Champions", "LEGO Overwatch", "LEGO The Movie", "LEGO Toy Story 4", "LEGO Spiderman", "LEGO Batman", "LEGO Jurassic World", "LEGO Hidden Side™", "LEGO Disney", "LEGO DOTS", "LEGO Trolls", "LEGO Super Mario", "LEGO ART", "LEGO Ideas", "LEGO Icons", "Disney Princess", "LEGO Harry Potter", "LEGO Vidiyo", "LEGO Minions", "LEGO Avatar", "LEGO Sonic", "LEGO DREAMZzz", "LEGO Gabby's Dollhouse", "LEGO Избрани", "LEGO Animal Crossing", "LEGO Fortnite", "LEGO Wednesday", "LEGO Horizon", "LEGO Wicked", "LEGO Despicable Me", "LEGO Botanicals", "LEGO Marvel", "LEGO Bluey", "LEGO One Piece"};
 
     // Aliases (common variants) -> preferred
@@ -69,11 +65,7 @@ public class LegoCsvBuilderNoDeps {
     // For series matching: normalized (lowercase, no symbols, spaces collapsed) -> preferred
     private static final Map<String, String> SERIES_NORM_TO_PREFERRED = new LinkedHashMap<>();
 
-    static {
-        for (String s : SERIES_LIST) {
-            SERIES_NORM_TO_PREFERRED.put(normalizeForMatch(s), s);
-        }
-    }
+    static {for (String s : SERIES_LIST) {SERIES_NORM_TO_PREFERRED.put(normalizeForMatch(s), s);}}
 
     public static void main(String[] args) {
         try {
@@ -213,7 +205,6 @@ public class LegoCsvBuilderNoDeps {
 
     private static String buildSeriesRegex(String preferred) {
         String p = stripSymbolsAndCollapse(preferred);
-        // Replace spaces with \\s+; keep word boundaries around each token
         String[] toks = p.split(" ");
         StringBuilder sb = new StringBuilder();
         sb.append("(?iu)\\b");
@@ -275,7 +266,6 @@ public class LegoCsvBuilderNoDeps {
     }
 
     // ==================== Utils & Transformers ===================== \\
-
     private static Map<String, String> loadLegoToSku(Path magentoPath) throws IOException {
         Map<String, String> map = new HashMap<>();
         try (BufferedReader br = Files.newBufferedReader(magentoPath, StandardCharsets.UTF_8)) {
@@ -352,7 +342,6 @@ public class LegoCsvBuilderNoDeps {
     }
 
     // ================ Series detection & normalization ================ \\
-
     // Normalize for matching: lowercase, remove ™®©, unify hyphens/apostrophes to spaces, collapse spaces
     private static String normalizeForMatch(String s) {
         if (s == null) return "";
@@ -368,7 +357,6 @@ public class LegoCsvBuilderNoDeps {
     // Return preferred series (from SERIES_LIST) if found in name; else null
     private static String detectSeries(String productNameCleaned) {
         String name = stripSymbolsAndCollapse(productNameCleaned);
-
         String best = null;
         int bestLen = -1;
 

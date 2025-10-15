@@ -2,7 +2,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DescriptionHtmlBuilder {
-    // two or more newlines separate paragraphs/blocks
     private static final String BULLET_POINT_DELIMITER = "(?:\\r?\\n){2,}";
 
     public static String buildHtml(String description, String bulletPoints) {
@@ -21,7 +20,6 @@ public class DescriptionHtmlBuilder {
             }
             html.append("</ul>");
         }
-
         return html.toString();
     }
 
