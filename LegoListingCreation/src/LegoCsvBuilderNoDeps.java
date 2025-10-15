@@ -16,8 +16,8 @@ public class LegoCsvBuilderNoDeps {
 
     private static boolean containsCyrillic(String s) {return s != null && s.matches(".*\\p{IsCyrillic}.*");}
 
-    private static final String MAGENTO_IMPORT_FILE = "C:\\Users\\kiril.stoyanov\\Desktop\\JavaProject\\LegoListingCreation\\res\\magento_import.csv";
-    private static final String LEGO_SCRAPE_FILE = "C:\\Users\\kiril.stoyanov\\Desktop\\JavaProject\\LegoListingCreation\\res\\lego-scrape.csv";
+    private static final String MAGENTO_IMPORT_FILE = "C:\\Users\\kiril\\Downloads\\LEGO_Product_Creation_Magento-main\\LEGO_Product_Creation_Magento-main\\LegoListingCreation\\res\\magento_import.csv";
+    private static final String LEGO_SCRAPE_FILE = "C:\\Users\\kiril\\Downloads\\LEGO_Product_Creation_Magento-main\\LEGO_Product_Creation_Magento-main\\LegoListingCreation\\res\\lego-scrape.csv";
     private static final String OUTPUT_FILE = "LEGO_NEW_IMPORT.csv";
 
     private static final int IDX_B = 1;  // bulletpoints
@@ -36,14 +36,15 @@ public class LegoCsvBuilderNoDeps {
     private static final String RESPONSIBLE_ENTITY_NAME = "LEGO System A/S";
     private static final String RESPONSIBLE_ENTITY_ADDRESS = "Dinu Vintila Street 11 9th Fl 021101 Bucharest";
     private static final String RESPONSIBLE_ENTITY_CONTACT = "lucretiu.dumitrescu@lego.com";
-    private static final String STORE_ID = "base";
+    private static final String STORE_ID = "base"; // For mobile store use: fluxstore_website
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     // Series list
-    private static final String[] SERIES_LIST = new String[]{"LEGO Classic", "LEGO Architecture", "LEGO Creator", "LEGO City", "LEGO Super Heroes", "LEGO Boost", "LEGO Star Wars", "LEGO Duplo", "LEGO Friends", "LEGO Technic", "LEGO Minecraft", "LEGO Ninjago", "LEGO Juniors", "LEGO Speed Champions", "LEGO Overwatch", "LEGO The Movie", "LEGO Toy Story 4", "LEGO Spiderman", "LEGO Batman", "LEGO Jurassic World", "LEGO Hidden Side™", "LEGO Disney", "LEGO DOTS", "LEGO Trolls", "LEGO Super Mario", "LEGO ART", "LEGO Ideas", "LEGO Icons", "Disney Princess", "LEGO Harry Potter", "LEGO Vidiyo", "LEGO Minions", "LEGO Avatar", "LEGO Sonic", "LEGO DREAMZzz", "LEGO Gabby's Dollhouse", "LEGO Избрани", "LEGO Animal Crossing", "LEGO Fortnite", "LEGO Wednesday", "LEGO Horizon", "LEGO Wicked", "LEGO Despicable Me", "LEGO Botanicals", "LEGO Marvel", "LEGO Bluey", "LEGO One Piece"};
+    private static final String[] SERIES_LIST = new String[]{"LEGO Classic", "LEGO Architecture", "LEGO Creator", "LEGO City", "LEGO Super Heroes", "LEGO Boost", "LEGO Star Wars", "LEGO Duplo", "LEGO Friends", "LEGO Technic", "LEGO Minecraft", "LEGO Ninjago", "LEGO Juniors", "LEGO Speed Champions", "LEGO Overwatch", "LEGO The Movie", "LEGO Toy Story 4", "LEGO Spiderman", "LEGO Batman", "LEGO Jurassic World", "LEGO Hidden Side™", "LEGO Disney", "LEGO Disney Princess", "LEGO DOTS", "LEGO Trolls", "LEGO Super Mario", "LEGO ART", "LEGO Ideas", "LEGO Icons", "Disney Princess", "LEGO Harry Potter", "LEGO Vidiyo", "LEGO Minions", "LEGO Avatar", "LEGO Sonic", "LEGO DREAMZzz", "LEGO Gabby's Dollhouse", "LEGO Избрани", "LEGO Animal Crossing", "LEGO Fortnite", "LEGO Wednesday", "LEGO Horizon", "LEGO Wicked", "LEGO Despicable Me", "LEGO Botanicals", "LEGO Marvel", "LEGO Bluey", "LEGO One Piece"};
 
     // Aliases (common variants) -> preferred
     private static final Map<String, String> SERIES_ALIASES = new LinkedHashMap<>();
+    private static final Map<String, String> SERIES_OVERRIDES = new LinkedHashMap<>();
 
     static {
         SERIES_ALIASES.put("LEGO DUPLO", "LEGO Duplo");
@@ -54,6 +55,11 @@ public class LegoCsvBuilderNoDeps {
         SERIES_ALIASES.put("LEGO Super-Heroes", "LEGO Super Heroes");
         SERIES_ALIASES.put("LEGO Art", "LEGO ART");
         SERIES_ALIASES.put("LEGO Gabbys Dollhouse", "LEGO Gabby's Dollhouse");
+        SERIES_ALIASES.put("LEGO Disney Princess", "LEGO Disney");
+    }
+
+    static {
+        SERIES_OVERRIDES.put("LEGO Disney Princess", "LEGO Disney");
     }
 
     // Precompiled helpers for matching
@@ -85,7 +91,7 @@ public class LegoCsvBuilderNoDeps {
             try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8); BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
                 bw.write("\uFEFF"); // UTF-8 BOM for Excel
 
-                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact", "product_websites"};
+                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact", "product_websites", "nomenclature_number"};
                 writeCsvLine(bw, header);
 
                 String record;
@@ -121,7 +127,8 @@ public class LegoCsvBuilderNoDeps {
                     String baseName = cleanName(containsCyrillic(rawNameT) ? rawNameT : rawNameH);
 
                     // ---- Series detection & name normalization ----
-                    String detectedSeries = detectSeries(baseName);
+                    String detectedSeriesOriginal = detectSeries(baseName);
+                    String detectedSeries = applySeriesOverride(detectedSeriesOriginal);
                     String name;
                     if (detectedSeries != null) {
                         String preferredForName = stripSymbolsAndCollapse(detectedSeries);
@@ -140,7 +147,7 @@ public class LegoCsvBuilderNoDeps {
                     String heiCm = mmToCmString(safe(row, IDX_T));
                     String weight = safe(row, IDX_Y);
 
-                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, "9999", "0", "simple", "Default", CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT, STORE_ID};
+                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, "9999", "0", "simple", "Default", CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT, STORE_ID, legoCode};
                     writeCsvLine(bw, out);
                 }
             }
@@ -194,7 +201,7 @@ public class LegoCsvBuilderNoDeps {
         return !inQuotes;
     }
 
-    // Normalize for pattern build (remove ™®©, collapse whitespace)
+    // Normalize for pattern build
     private static String stripSymbolsAndCollapse(String s) {
         if (s == null) return "";
         String out = TRADEMARKS.matcher(s).replaceAll("");
@@ -384,6 +391,13 @@ public class LegoCsvBuilderNoDeps {
                 }
             }
         }
-        return best;
+        return applySeriesOverride(best);
+    }
+
+    private static String applySeriesOverride(String detected) {
+        if (detected == null || detected.isBlank()) return detected;
+        String key = stripSymbolsAndCollapse(detected).trim();
+        String repl = SERIES_OVERRIDES.get(key);
+        return (repl != null && !repl.isBlank()) ? repl : detected;
     }
 }
