@@ -31,7 +31,7 @@ public class LegoCsvBuilderNoDeps {
     private static final int IDX_Y = 24; // weight
 
     // Fixed values
-    private static final String CATEGORIES = "Default Category/Меню продукти/Детски играчки/LEGO," + "Default Category," + "Default Category/Меню продукти," + "Default Category/Меню продукти/Детски играчки," + "Default Category/Ново," + "Default Category/Ново/Детски играчки - Ново";
+    private static final String CATEGORIES = "Default Category/Меню продукти/Детски играчки/LEGO," + "Default Category," + "Default Category/Меню продукти," + "Default Category/Меню продукти/Детски играчки," + "Default Category/Ново," + "Default Category/Ново/Детски играчки - Ново," + "Default Category/Меню продукти/Детски играчки/Конструктори и мозайки," + "Default Category/Меню продукти/Детски играчки/Конструктори и мозайки/Конструктори";
     private static final String MANUFACTURER = "LEGO";
     private static final String RESPONSIBLE_ENTITY_NAME = "LEGO System A/S";
     private static final String RESPONSIBLE_ENTITY_ADDRESS = "Dinu Vintila Street 11 9th Fl 021101 Bucharest";
