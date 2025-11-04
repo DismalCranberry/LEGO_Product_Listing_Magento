@@ -2,61 +2,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>LEGO Scraper</title>
-  <style>
-    body {
-      font-family: monospace;
-      margin: 10px;
-      width: 340px;
-      background: #fafafa;
-      color: #222;
-    }
-    textarea, input {
-      width: 100%;
-      box-sizing: border-box;
-      font-family: monospace;
-    }
-    textarea {
-      height: 60px;
-      resize: vertical;
-    }
-    #status {
-      background: #111;
-      color: #0f0;
-      padding: 5px;
-      height: 180px;
-      overflow-y: auto;
-      font-size: 11px;
-      margin-top: 8px;
-      white-space: pre-wrap;
-    }
-    button {
-      padding: 6px 10px;
-      margin-right: 6px;
-      margin-top: 8px;
-      font-family: monospace;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>LEGO Scraper</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 10px;
+            width: 340px;
+            background: #fafafa;
+            color: #222;
+        }
+
+        textarea, input {
+            width: 100%;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+
+        textarea {
+            height: 60px;
+            resize: vertical;
+        }
+
+        #status {
+            background: #111;
+            color: #0f0;
+            padding: 5px;
+            height: 180px;
+            overflow-y: auto;
+            font-size: 11px;
+            margin-top: 8px;
+            white-space: pre-wrap;
+        }
+
+        button {
+            padding: 6px 10px;
+            margin-right: 6px;
+            margin-top: 8px;
+            font-family: monospace;
+        }
+    </style>
 </head>
 <body>
-  <h3>Dormant LEGO Scraper</h3>
+<h3>Dormant LEGO Scraper</h3>
 
-  <label>Product IDs (comma or space separated):</label>
-  <textarea id="ids" placeholder="1234, 5678, 9012"></textarea>
+<label>Product IDs (comma or space separated):</label>
+<textarea id="ids" placeholder="1234, 5678, 9012"></textarea>
 
-  <label>URL template (use {id}):</label>
-  <input id="tmpl" type="text" placeholder="https://content.lego.com/api/products/{id}" />
+<label>URL template (use {id}):</label>
+<input id="tmpl" type="text" placeholder="https://content.lego.com/api/products/{id}"/>
 
-  <div>
+<div>
     <button id="start">Start</button>
     <button id="stop" disabled>Stop</button>
     <button id="save">Save XML</button>
-	<button id="clear">Clear Input</button>
-  </div>
+    <button id="clear">Clear Input</button>
+</div>
 
-  <div id="status"></div>
+<div id="status"></div>
 
-  <script src="popup.js"></script>
+<script src="popup.js"></script>
 </body>
 </html>

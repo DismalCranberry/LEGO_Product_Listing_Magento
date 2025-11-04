@@ -12,12 +12,24 @@
   "icons": {
     "128": "icons/bricked128.png"
   },
-  "permissions": ["tabs", "scripting", "downloads", "storage", "clipboardWrite"],
-  "host_permissions": ["https://content.lego.com/*"],
+  "permissions": [
+    "tabs",
+    "scripting",
+    "downloads",
+    "storage",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://content.lego.com/*"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://content.lego.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://content.lego.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
