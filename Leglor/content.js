@@ -1,5 +1,56 @@
 // Dormant page scraper. No work until window.__DormantScraper__.run() is called.
 (() => {
+
+// --- force "Standard" view on LEGO text pages ---
+    function forceStandardView() {
+        // only target .../products/{id}/29/text
+        const path = location.pathname;
+        if (!/\/products\/[^/]+\/29\/text\/?$/.test(path)) return;
+
+        function findButtons() {
+            const buttons = Array.from(document.querySelectorAll('button.chakra-button'));
+            const standardBtn = buttons.find(b => b.textContent && b.textContent.trim().toLowerCase() === 'standard');
+            const optimizedBtn = buttons.find(b => b.textContent && b.textContent.trim().toLowerCase() === 'optimized');
+            return {standardBtn, optimizedBtn};
+        }
+
+        function clickStandardIfPossible() {
+            const {standardBtn} = findButtons();
+            if (standardBtn) {
+                standardBtn.click();
+                return true;
+            }
+            return false;
+        }
+
+        // 1) try right away
+        clickStandardIfPossible();
+
+        // 2) watch for late-rendered UI
+        const mo = new MutationObserver(() => {
+            // if we can click it now, great
+            if (clickStandardIfPossible()) {
+                // don't disconnect yet — we still want to watch for their “switch back”
+                // we’ll let the interval below handle timing out
+            }
+        });
+        mo.observe(document.body, {childList: true, subtree: true});
+
+        // 3) be stubborn for a short window (LEGO seems to flip to "Optimized" late)
+        const enforceUntil = Date.now() + 8000; // 8 seconds after load
+        const interval = setInterval(() => {
+            if (Date.now() > enforceUntil) {
+                clearInterval(interval);
+                mo.disconnect();
+                return;
+            }
+            clickStandardIfPossible();
+        }, 400);
+    }
+
+// run it as soon as the content script loads
+    forceStandardView();
+
     const FIELDS = ["Name", "Shopper Name", "Title Short", "Title Medium", "Title Long", "Header", "Quick View", "Description", "Bullet Short", "Bullet Long",];
 
     const BASICS_FIELDS = ["Pieces", "Age", "Product", "Item", "Version", "Piece barcode", "Carton Barcode"];
@@ -17,6 +68,21 @@
         }
         return "";
     }
+
+    function forceStandardTabNow() {
+        // only care about the text pages
+        const path = location.pathname;
+        if (!/\/products\/[^/]+\/29\/text\/?$/.test(path)) {
+            return;
+        }
+
+        const buttons = Array.from(document.querySelectorAll('button.chakra-button'));
+        const standardBtn = buttons.find((b) => b.textContent && b.textContent.trim().toLowerCase() === 'standard');
+        if (standardBtn) {
+            standardBtn.click();
+        }
+    }
+
 
     function findRoot() {
         const stacks = Array.from(document.querySelectorAll('div[class*="chakra-stack"]'));
@@ -238,14 +304,26 @@
     }
 
     window.__DormantScraper__ = Object.freeze({
-        run: () => collect(), toJSON: () => JSON.stringify(collect(), null, 2), copy: async () => {
+        run: () => {
+            // make sure we’re on the Standard tab *right now*
+            forceStandardTabNow();
+            // now read the DOM
+            return collect();
+        }, toJSON: () => {
+            forceStandardTabNow();
+            return JSON.stringify(collect(), null, 2);
+        }, copy: async () => {
+            forceStandardTabNow();
             const json = JSON.stringify(collect(), null, 2);
             try {
                 await navigator.clipboard.writeText(json);
             } catch {
             }
             return json;
-        }, log: () => console.log(collect()), ready: () => ready(), isReady: (minValued = 2) => {
+        }, log: () => {
+            forceStandardTabNow();
+            console.log(collect());
+        }, ready: () => ready(), isReady: (minValued = 2) => {
             try {
                 const {valued} = ready();
                 return valued >= (Number(minValued) || 2);

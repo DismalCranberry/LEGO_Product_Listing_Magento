@@ -1,13 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Dormant LEGO Content Scraper",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "action": {
     "default_title": "Scrape LEGO content",
     "default_popup": "popup.html",
     "default_icon": {
       "128": "icons/bricked128.png"
     }
+  },
+  "background": {
+    "service_worker": "service_worker.js",
+    "type": "module"
   },
   "icons": {
     "128": "icons/bricked128.png"
