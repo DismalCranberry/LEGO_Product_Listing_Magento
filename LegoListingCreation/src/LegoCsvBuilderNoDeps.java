@@ -22,6 +22,7 @@ public class LegoCsvBuilderNoDeps {
 
     private static final int IDX_B = 1;  // bulletpoints
     private static final int IDX_C = 2;  // description
+    private static final int IDX_E = 4;  // alternative name
     private static final int IDX_F = 5;  // lego code
     private static final int IDX_H = 7;  // name
     private static final int IDX_M = 12; // age
@@ -122,9 +123,17 @@ public class LegoCsvBuilderNoDeps {
                     String htmlFlat = html.replace("\n", "<br>");
 
                     // Clean base name (remove symbols & punctuation per earlier rule)
-                    String rawNameH = safe(row, IDX_H);
-                    String rawNameT = (LegoCsvBuilderNoDeps.IDX_T < row.length) ? safe(row, IDX_T) : "";
-                    String baseName = cleanName(containsCyrillic(rawNameT) ? rawNameT : rawNameH);
+                    String rawNameH = safe(row, IDX_H); // main name
+                    String rawNameE = safe(row, IDX_E); // alternative name
+                    String rawNameT = (IDX_T < row.length) ? safe(row, IDX_T) : "";
+
+                    String picked = !rawNameH.isBlank() ? rawNameH : !rawNameE.isBlank() ? rawNameE : "";
+
+                    if (containsCyrillic(rawNameT)) {
+                        picked = rawNameT;
+                    }
+
+                    String baseName = cleanName(picked);
 
                     // ---- Series detection & name normalization ----
                     String detectedSeriesOriginal = detectSeries(baseName);
@@ -137,9 +146,6 @@ public class LegoCsvBuilderNoDeps {
                     } else {
                         name = baseName;
                     }
-
-                    // Append LEGO code (space only, no dash)
-                    name = name.isEmpty() ? legoCode : name + " " + legoCode;
 
                     String age = convertAge(safe(row, IDX_M));
                     String lenCm = mmToCmString(safe(row, IDX_R));
