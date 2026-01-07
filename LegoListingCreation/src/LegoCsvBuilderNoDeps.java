@@ -14,22 +14,31 @@ import java.util.regex.Pattern;
 
 public class LegoCsvBuilderNoDeps {
 
-    private static boolean containsCyrillic(String s) {return s != null && s.matches(".*\\p{IsCyrillic}.*");}
+    private static final String MAGENTO_IMPORT_FILE = "res/magento_import.csv";
+    private static final String LEGO_SCRAPE_FILE = "res/lego-scrape.csv";
+    private static final String OUTPUT_MAIN_FILE = "results/LEGO_FOR_IMPORT.csv";
+    private static final String OUTPUT_SECOND_FILE = "results/LEGO_SASHO.csv";
 
-    private static final String MAGENTO_IMPORT_FILE = "C:\\Users\\kiril\\Downloads\\LEGO_Product_Creation_Magento-main\\LEGO_Product_Creation_Magento-main\\LegoListingCreation\\res\\magento_import.csv";
-    private static final String LEGO_SCRAPE_FILE = "C:\\Users\\kiril\\Downloads\\LEGO_Product_Creation_Magento-main\\LEGO_Product_Creation_Magento-main\\LegoListingCreation\\res\\lego-scrape.csv";
-    private static final String OUTPUT_FILE = "LEGO_NEW_IMPORT.csv";
 
-    private static final int IDX_B = 1;  // bulletpoints
-    private static final int IDX_C = 2;  // description
-    private static final int IDX_E = 4;  // alternative name
-    private static final int IDX_F = 5;  // lego code
-    private static final int IDX_H = 7;  // name
-    private static final int IDX_M = 12; // age
-    private static final int IDX_R = 17; // length
-    private static final int IDX_S = 18; // width
-    private static final int IDX_T = 19; // height
-    private static final int IDX_Y = 24; // weight
+    private static final int IDX_B = 1;   // Bulletpoints
+    private static final int IDX_C = 2;   // Description
+    private static final int IDX_E = 4;   // Alternative name
+    private static final int IDX_F = 5;   // Lego code
+    private static final int IDX_H = 7;   // Name
+    private static final int IDX_M = 12;  // Age
+    private static final int IDX_O = 14;  // Barcode
+    private static final int IDX_S = 18;  // Length
+    private static final int IDX_T = 19;  // Width
+    private static final int IDX_U = 20;  // Height
+    private static final int IDX_Y = 24;  // Weight
+    private static final int IDX_AC = 28; // Main V29
+    private static final int IDX_AD = 29; // Box & Product V29
+    private static final int IDX_AE = 30; // Build
+    private static final int IDX_AF = 31; // Consumer
+    private static final int IDX_AG = 32; // Environment
+    private static final int IDX_AH = 33; // Product
+    private static final int IDX_AI = 34; // Secondary 01 (No BG)
+    private static final int IDX_AJ = 35; // Secondary 02 (No BG)
 
     // Fixed values
     private static final String CATEGORIES = "Default Category/Меню продукти/Детски играчки/LEGO," + "Default Category," + "Default Category/Меню продукти," + "Default Category/Меню продукти/Детски играчки," + "Default Category/Ново," + "Default Category/Ново/Детски играчки - Ново," + "Default Category/Меню продукти/Детски играчки/Конструктори и мозайки," + "Default Category/Меню продукти/Детски играчки/Конструктори и мозайки/Конструктори";
@@ -37,7 +46,7 @@ public class LegoCsvBuilderNoDeps {
     private static final String RESPONSIBLE_ENTITY_NAME = "LEGO System A/S";
     private static final String RESPONSIBLE_ENTITY_ADDRESS = "Dinu Vintila Street 11 9th Fl 021101 Bucharest";
     private static final String RESPONSIBLE_ENTITY_CONTACT = "lucretiu.dumitrescu@lego.com";
-    private static final String STORE_ID = "base"; // For mobile store use: fluxstore_website
+    private static final String STORE_ID = "base";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     // Series list
@@ -73,13 +82,18 @@ public class LegoCsvBuilderNoDeps {
     // For series matching: normalized (lowercase, no symbols, spaces collapsed) -> preferred
     private static final Map<String, String> SERIES_NORM_TO_PREFERRED = new LinkedHashMap<>();
 
-    static {for (String s : SERIES_LIST) {SERIES_NORM_TO_PREFERRED.put(normalizeForMatch(s), s);}}
+    static {
+        for (String s : SERIES_LIST) {
+            SERIES_NORM_TO_PREFERRED.put(normalizeForMatch(s), s);
+        }
+    }
 
     public static void main(String[] args) {
         try {
             Path magentoPath = Paths.get(MAGENTO_IMPORT_FILE);
             Path scrapePath = Paths.get(LEGO_SCRAPE_FILE);
-            Path outputPath = Paths.get(OUTPUT_FILE);
+            Path outputPath = Paths.get(OUTPUT_MAIN_FILE);
+            Path indexPath = Paths.get(OUTPUT_SECOND_FILE);
 
             Map<String, String> legoToSku = loadLegoToSku(magentoPath);
 
@@ -89,11 +103,15 @@ public class LegoCsvBuilderNoDeps {
             String newsFrom = fromDate.format(DATE_FMT);
             String newsTo = toDate.format(DATE_FMT);
 
-            try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8); BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
+            try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8); BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8); BufferedWriter bwIndex = Files.newBufferedWriter(indexPath, StandardCharsets.UTF_8)) {
+                // MAIN CSV
                 bw.write("\uFEFF"); // UTF-8 BOM for Excel
-
-                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact", "product_websites", "nomenclature_number"};
+                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact", "product_websites", "nomenclature_number", "base_image", "small_image", "thumbnail_image", "additional_images"};
                 writeCsvLine(bw, header);
+
+                // SECOND CSV (IDX_F, IDX_H, IDX_O)
+                bwIndex.write("\uFEFF"); // UTF-8 BOM for Excel
+                writeCsvLine(bwIndex, new String[]{"lego_code", "name", "barcode"});
 
                 String record;
                 boolean maybeHeader = true;
@@ -110,10 +128,18 @@ public class LegoCsvBuilderNoDeps {
 
                     if (!hasIndex(row)) continue;
 
-                    String legoCode = safe(row, IDX_F).trim();
-                    if (legoCode.isEmpty()) continue;
+                    // Required fields for index CSV
+                    String legoCodeOut = safe(row, IDX_F).trim();
+                    if (legoCodeOut.isEmpty()) continue;
 
-                    String sku = legoToSku.get(legoCode);
+                    String nameOut = cleanName(safe(row, IDX_H)).trim();
+                    String barcodeOut = safe(row, IDX_O).trim();
+
+                    // Write second CSV row (always, if lego code exists)
+                    writeCsvLine(bwIndex, new String[]{legoCodeOut, nameOut, barcodeOut});
+
+                    // MAIN output logic (only if SKU exists)
+                    String sku = legoToSku.get(legoCodeOut);
                     if (sku == null || sku.isEmpty()) continue;
 
                     String bulletpoints = normalizeNewlines(safe(row, IDX_B));
@@ -122,22 +148,15 @@ public class LegoCsvBuilderNoDeps {
                     String html = DescriptionHtmlBuilder.buildHtml(description, bulletpoints);
                     String htmlFlat = html.replace("\n", "<br>");
 
-                    // Clean base name (remove symbols & punctuation per earlier rule)
                     String rawNameH = safe(row, IDX_H); // main name
                     String rawNameE = safe(row, IDX_E); // alternative name
-                    String rawNameT = (IDX_T < row.length) ? safe(row, IDX_T) : "";
-
                     String picked = !rawNameH.isBlank() ? rawNameH : !rawNameE.isBlank() ? rawNameE : "";
-
-                    if (containsCyrillic(rawNameT)) {
-                        picked = rawNameT;
-                    }
-
                     String baseName = cleanName(picked);
 
                     // ---- Series detection & name normalization ----
                     String detectedSeriesOriginal = detectSeries(baseName);
                     String detectedSeries = applySeriesOverride(detectedSeriesOriginal);
+
                     String name;
                     if (detectedSeries != null) {
                         String preferredForName = stripSymbolsAndCollapse(detectedSeries);
@@ -148,18 +167,26 @@ public class LegoCsvBuilderNoDeps {
                     }
 
                     String age = convertAge(safe(row, IDX_M));
-                    String lenCm = mmToCmString(safe(row, IDX_R));
-                    String widCm = mmToCmString(safe(row, IDX_S));
-                    String heiCm = mmToCmString(safe(row, IDX_T));
+                    String lenCm = mmToCmString(safe(row, IDX_S));
+                    String widCm = mmToCmString(safe(row, IDX_T));
+                    String heiCm = mmToCmString(safe(row, IDX_U));
                     String weight = safe(row, IDX_Y);
+                    String baseImage = safe(row, IDX_AC);
+                    String base_image = baseImage;
+                    String small_image = baseImage;
+                    String thumbnail_image = baseImage;
+                    String additional_images = joinNonBlank(safe(row, IDX_AD), safe(row, IDX_AE), safe(row, IDX_AF), safe(row, IDX_AG), safe(row, IDX_AH), safe(row, IDX_AI), safe(row, IDX_AJ));
 
-                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, "9999", "0", "simple", "Default", CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT, STORE_ID, legoCode};
+                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, "9999", "0", "simple", "Default", CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT, STORE_ID, legoCodeOut, base_image, small_image, thumbnail_image, additional_images};
                     writeCsvLine(bw, out);
                 }
             }
+
             System.out.println("✅ Done. Wrote: " + outputPath.toAbsolutePath());
+            System.out.println("✅ Done. Wrote: " + indexPath.toAbsolutePath());
+
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("I/O error while processing input: " + e.getMessage());
         }
     }
 
@@ -405,5 +432,16 @@ public class LegoCsvBuilderNoDeps {
         String key = stripSymbolsAndCollapse(detected).trim();
         String repl = SERIES_OVERRIDES.get(key);
         return (repl != null && !repl.isBlank()) ? repl : detected;
+    }
+
+    private static String joinNonBlank(String... values) {
+        StringBuilder sb = new StringBuilder();
+        for (String v : values) {
+            if (v != null && !v.isBlank()) {
+                if (!sb.isEmpty()) sb.append(",");
+                sb.append(v.trim());
+            }
+        }
+        return sb.toString();
     }
 }
