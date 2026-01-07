@@ -55,6 +55,9 @@
 
     const BASICS_FIELDS = ["Pieces", "Age", "Product", "Item", "Version", "Piece barcode", "Carton Barcode"];
 
+    // Asset labels shown on /products/{id}/29/assets
+    const ASSET_LABELS = ["Main V29", "Box & Product V29", "Build", "Consumer", "Environment", "Product", "Secondary 01 (No BG)", "Secondary 02 (No BG)"];
+
     const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
     const keyNorm = (s) => norm(s).toLowerCase();
 
@@ -107,12 +110,30 @@
         const sides = Array.from(block.children);
         const rightSide = sides.length > 1 ? sides[1] : block;
 
-        const valuePs = Array.from(rightSide.querySelectorAll("p")).filter((p) => p !== labelP && norm(p.textContent));
+        let valuePs = [];
+
+        if (rightSide && rightSide.tagName === "P") {
+            // Common /data layout: label <p> then value <p>
+            valuePs = [rightSide];
+        } else {
+            valuePs = Array.from(rightSide.querySelectorAll("p"));
+        }
+
+        valuePs = valuePs.filter((p) => p !== labelP && norm(p.textContent));
 
         if (valuePs.length === 0) {
             let cursor = labelP.nextElementSibling;
-            while (cursor && cursor.tagName !== "P") cursor = cursor.nextElementSibling;
-            if (cursor && norm(cursor.textContent)) valuePs.push(cursor);
+
+            // walk to the next element that actually has meaningful text
+            while (cursor && !norm(cursor.textContent)) cursor = cursor.nextElementSibling;
+
+            if (cursor) {
+                // if it's a wrapper, prefer an inner <p>
+                const innerP = cursor.querySelector?.("p");
+                const node = innerP || cursor;
+
+                if (norm(node.textContent)) valuePs.push(node);
+            }
         }
         return valuePs.map((p) => norm(p.textContent));
     }
@@ -164,10 +185,11 @@
 
     // ---------- DATA PAGE: Basics ----------
     function collectBasics() {
-        const root = findRoot();
+        const root = findSectionRootByTitle("Basics");   // <- the key improvement
+        const BASICS_FIELDS = ["Age", "Pieces", "Piece barcode"];
         const labels = findLabelNodes(root, BASICS_FIELDS);
-
         const valuesByKey = {};
+
         for (const label of BASICS_FIELDS) {
             const nodes = labels[label] || [];
             if (!nodes.length) continue;
@@ -176,10 +198,16 @@
         }
 
         const basics = {};
-        if (valuesByKey["Age"]) basics.age = valuesByKey["Age"];         // e.g. "18+"
-        if (valuesByKey["Pieces"]) basics.pieces = valuesByKey["Pieces"];   // e.g. "789"
-        return (basics.age || basics.pieces) ? basics : null;
+
+        if (valuesByKey["Age"]) basics.age = String(valuesByKey["Age"]).trim();
+        if (valuesByKey["Pieces"]) basics.pieces = String(valuesByKey["Pieces"]).trim();
+        if (valuesByKey["Piece barcode"]) {
+            const digits = String(valuesByKey["Piece barcode"]).replace(/\D+/g, "");
+            if (digits) basics.pieceBarcode = digits;
+        }
+        return (basics.age || basics.pieces || basics.pieceBarcode) ? basics : null;
     }
+
 
 // ---------- DATA PAGE: Dimension table (robust "row B" extraction) ----------
     function collectDimensionsB() {
@@ -262,7 +290,102 @@
         return Object.values(out).some(Boolean) ? out : null;
     }
 
+    // ---------- ASSETS PAGE: image label -> original image URL ----------
+    function isAssetsPage() {
+        return /\/products\/[^/]+\/29\/assets\/?$/.test(location.pathname);
+    }
+
+    function cleanImgUrl(u) {
+        const s = String(u || "");
+        return s.split("?")[0];
+    }
+
+    function aspectScore(img) {
+        // Use intrinsic size if available; fall back to layout size.
+        const w = img.naturalWidth || img.width || 0;
+        const h = img.naturalHeight || img.height || 0;
+        if (!w || !h) return Number.POSITIVE_INFINITY; // deprioritize unloaded/zero-size
+        const r = w / h;
+        return Math.abs(r - 1); // distance from perfect square
+    }
+
+    // Try to find the "card" container that contains both the <img> and its label <p>.
+    // We avoid using session-specific CSS class names.
+    function findAssetCardRoot(img) {
+        let el = img;
+        for (let i = 0; i < 8 && el; i++) {
+            el = el.parentElement;
+            if (!el) break;
+            const hasP = el.querySelectorAll && el.querySelectorAll("p").length > 0;
+            const hasImg = el.querySelectorAll && el.querySelectorAll("img").length > 0;
+            // This heuristic catches the common layout: a wrapper that contains the image and some <p> text.
+            if (hasP && hasImg) return el;
+        }
+        return img.closest("div") || document.body;
+    }
+
+    function collectAssets() {
+        if (!isAssetsPage()) return null;
+
+        const wanted = new Set(ASSET_LABELS.map(keyNorm));
+
+        // label -> array of <img> candidates
+        const buckets = new Map();
+
+        const imgs = Array.from(document.querySelectorAll('img[src*="image.content.lego.com/public/image/"]'));
+
+        for (const img of imgs) {
+            const root = findAssetCardRoot(img);
+            const ps = Array.from(root.querySelectorAll("p"));
+            const labelP = ps.find(p => wanted.has(keyNorm(p.textContent)));
+            if (!labelP) continue;
+
+            const rawLabel = norm(labelP.textContent);
+            if (!rawLabel) continue;
+
+            const labelKey = keyNorm(rawLabel);
+            const canonicalLabel = ASSET_LABELS.find(l => keyNorm(l) === labelKey) || rawLabel;
+
+            if (!buckets.has(canonicalLabel)) {
+                buckets.set(canonicalLabel, []);
+            }
+            buckets.get(canonicalLabel).push(img);
+        }
+        const out = {};
+
+        // For each label, pick the img closest to 1:1 aspect ratio
+        for (const [label, imgsForLabel] of buckets.entries()) {
+            if (!imgsForLabel.length) continue;
+
+            let bestImg = imgsForLabel[0];
+            let bestScore = aspectScore(bestImg);
+
+            for (let i = 1; i < imgsForLabel.length; i++) {
+                const candidate = imgsForLabel[i];
+                const score = aspectScore(candidate);
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestImg = candidate;
+                }
+            }
+            const src = bestImg.currentSrc || bestImg.src;
+            if (!src) continue;
+
+            out[label] = cleanImgUrl(src);
+        }
+        return Object.keys(out).length ? out : null;
+    }
+
+
     function collect() {
+        // If we're on /assets, return asset columns directly.
+        const assets = collectAssets();
+        if (assets) {
+            return Object.assign({
+                productId: extractProductIdFromURL(location.href), url: location.href
+            }, assets);
+        }
+
         const text = collectText();
         const basics = collectBasics();
         const dimsB = collectDimensionsB();
@@ -276,7 +399,14 @@
 
     // ---- readiness: treat page as "ready" when any labeled block yields values ----
     function ready() {
-        const root = findRoot();
+        // Assets page: ready when we found at least one wanted asset
+        if (isAssetsPage()) {
+            const assets = collectAssets();
+            const n = assets ? Object.keys(assets).length : 0;
+            return {found: n, valued: n};
+        }
+
+        const root = findSectionRootByTitle("Basics");
         const labelsText = findLabelNodes(root, FIELDS);
         const labelsBasics = findLabelNodes(root, BASICS_FIELDS);
 
@@ -301,6 +431,15 @@
         }
 
         return {found, valued};
+    }
+
+    function findSectionRootByTitle(title) {
+        const wanted = keyNorm(title);
+        const heading = Array.from(document.querySelectorAll("p,h1,h2,h3,h4,h5"))
+            .find(el => keyNorm(el.textContent) === wanted);
+
+        // In your HTML, "Basics" is inside a wrapper like <div class="css-1bqan07">...</div>
+        return heading?.closest('div[class*="css-1bqan07"]') || heading?.closest('div[class*="chakra-stack"]') || heading?.parentElement || document.body;
     }
 
     window.__DormantScraper__ = Object.freeze({

@@ -194,7 +194,10 @@ async function scrapeCurrentTab(tabId) {
 }
 
 /* ---------- Column order for export ---------- */
-const OUTPUT_COLUMNS = ["bulletLong", "bulletShort", "description", "header", "name", "productId", "quickView", "shopperName", "titleLong", "titleMedium", "titleShort", "url", "age", "pieces", "dimB_altUoM", "dimB_qty", "dimB_qtyInBU", "dimB_length", "dimB_width", "dimB_height", "dimB_dimUnit", "dimB_volume", "dimB_volumeUnit", "dimB_netWeight", "dimB_grossWeight", "dimB_tareWeight", "dimB_weightUnit"];
+// Asset columns pulled from /products/{id}/29/assets
+const ASSET_COLUMNS = ["Main V29","Box & Product V29", "Build", "Consumer", "Environment", "Product", "Secondary 01 (No BG)", "Secondary 02 (No BG)"];
+
+const OUTPUT_COLUMNS = ["bulletLong", "bulletShort", "description", "header", "name", "productId", "quickView", "shopperName", "titleLong", "titleMedium", "titleShort", "url", "age", "pieces", "pieceBarcode", "dimB_altUoM", "dimB_qty", "dimB_qtyInBU", "dimB_length", "dimB_width", "dimB_height", "dimB_dimUnit", "dimB_volume", "dimB_volumeUnit", "dimB_netWeight", "dimB_grossWeight", "dimB_tareWeight", "dimB_weightUnit", ...ASSET_COLUMNS];
 
 /* ---------- SpreadsheetML XML (Excel) ---------- */
 function _toCellString(v) {
@@ -285,7 +288,7 @@ async function step(tabId, tmpl) {
         if (!ok2) logStatus(`Timeout waiting for DOM 'complete' for ${id} (/data)`);
 
         const {ready: r2, notFound: nf2} = await waitUntilReadyOrNotFound(tabId, {
-            timeoutMs: 20000, intervalMs: 400, minValued: 0
+            timeoutMs: 20000, intervalMs: 400, minValued: 2
         });
         let merged = {...textRec};
         if (nf2) {
@@ -294,6 +297,26 @@ async function step(tabId, tmpl) {
             await new Promise(r => setTimeout(r, 300));
             const dataRec = await scrapeCurrentTab(tabId) || {};
             merged = {...merged, ...dataRec}; // adds age, pieces, and dimB_* if found
+        }
+
+        // PHASE 3: /assets (image links)
+        const assetsUrl = `https://content.lego.com/products/${encodeURIComponent(id)}/29/assets`;
+        logStatus(`Loading ${assetsUrl}`);
+        await chrome.tabs.update(tabId, {url: assetsUrl});
+        const ok3 = await waitForTabComplete(tabId, 45000);
+        if (!ok3) logStatus(`Timeout waiting for DOM 'complete' for ${id} (/assets)`);
+
+        const {ready: r3, notFound: nf3} = await waitUntilReadyOrNotFound(tabId, {
+            timeoutMs: 20000, intervalMs: 400, minValued: 1
+        });
+
+        if (nf3) {
+            logStatus(`No /assets for ${id}; continuing without asset image links`);
+        } else {
+            if (!r3) logStatus(`Assets not ready after 20s for ${id} (/assets); proceeding`);
+            await new Promise(r => setTimeout(r, 300));
+            const assetsRec = await scrapeCurrentTab(tabId) || {};
+            merged = {...merged, ...assetsRec}; // adds columns like "Main V29",...
         }
 
         results.push(merged);

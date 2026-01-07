@@ -39,7 +39,6 @@ function extractFromBlock(doc, labelP) {
 
     const sides = Array.from(block.children);
     const rightSide = sides.length > 1 ? sides[1] : block;
-
     const valuePs = Array.from(rightSide.querySelectorAll("p"))
         .filter(p => p !== labelP && norm(p.textContent));
 
@@ -55,7 +54,6 @@ function extractFromHTML(html, url) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const root = findRoot(doc);
     const labels = findLabelNodes(root);
-
     const out = {
         productId: extractProductIdFromURL(url),
         name: "",
