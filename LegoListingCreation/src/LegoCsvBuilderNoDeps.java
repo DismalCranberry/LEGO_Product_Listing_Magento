@@ -19,18 +19,17 @@ public class LegoCsvBuilderNoDeps {
     private static final String OUTPUT_MAIN_FILE = "results/LEGO_FOR_IMPORT.csv";
     private static final String OUTPUT_SECOND_FILE = "results/LEGO_SASHO.csv";
 
-
-    private static final int IDX_B = 1;   // Bulletpoints
-    private static final int IDX_C = 2;   // Description
-    private static final int IDX_E = 4;   // Alternative name
-    private static final int IDX_F = 5;   // Lego code
-    private static final int IDX_H = 7;   // Name
-    private static final int IDX_M = 12;  // Age
-    private static final int IDX_O = 14;  // Barcode
-    private static final int IDX_S = 18;  // Length
-    private static final int IDX_T = 19;  // Width
-    private static final int IDX_U = 20;  // Height
-    private static final int IDX_Y = 24;  // Weight
+    private static final int IDX_B = 1; // Bulletpoints
+    private static final int IDX_C = 2; // Description
+    private static final int IDX_E = 4; // Alternative name
+    private static final int IDX_F = 5; // Lego code
+    private static final int IDX_H = 7; // Name
+    private static final int IDX_M = 12; // Age
+    private static final int IDX_O = 14; // Barcode
+    private static final int IDX_S = 18; // Length
+    private static final int IDX_T = 19; // Width
+    private static final int IDX_U = 20; // Height
+    private static final int IDX_Y = 24; // Weight
     private static final int IDX_AC = 28; // Main V29
     private static final int IDX_AD = 29; // Box & Product V29
     private static final int IDX_AE = 30; // Build
@@ -46,8 +45,14 @@ public class LegoCsvBuilderNoDeps {
     private static final String RESPONSIBLE_ENTITY_NAME = "LEGO System A/S";
     private static final String RESPONSIBLE_ENTITY_ADDRESS = "Dinu Vintila Street 11 9th Fl 021101 Bucharest";
     private static final String RESPONSIBLE_ENTITY_CONTACT = "lucretiu.dumitrescu@lego.com";
-    private static final String STORE_ID = "base";
+    private static final String STORE_ID = "base,fluxstore_website";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final String PRICE = "9999";
+    private static final String PRODUCT_ONLINE = "0";
+    private static final String PRODUCT_TYPE = "simple";
+    private static final String ATTRIBUTE_SET_CODE = "Default";
+    private static final String VISIBILITY = "Catalog, Search";
+    private static final String SEX = "За момчета,За момичета";
 
     // Series list
     private static final String[] SERIES_LIST = new String[]{"LEGO Classic", "LEGO Architecture", "LEGO Creator", "LEGO City", "LEGO Super Heroes", "LEGO Boost", "LEGO Star Wars", "LEGO Duplo", "LEGO Friends", "LEGO Technic", "LEGO Minecraft", "LEGO Ninjago", "LEGO Juniors", "LEGO Speed Champions", "LEGO Overwatch", "LEGO The Movie", "LEGO Toy Story 4", "LEGO Spiderman", "LEGO Batman", "LEGO Jurassic World", "LEGO Hidden Side™", "LEGO Disney", "LEGO Disney Princess", "LEGO DOTS", "LEGO Trolls", "LEGO Super Mario", "LEGO ART", "LEGO Ideas", "LEGO Icons", "Disney Princess", "LEGO Harry Potter", "LEGO Vidiyo", "LEGO Minions", "LEGO Avatar", "LEGO Sonic", "LEGO DREAMZzz", "LEGO Gabby's Dollhouse", "LEGO Избрани", "LEGO Animal Crossing", "LEGO Fortnite", "LEGO Wednesday", "LEGO Horizon", "LEGO Wicked", "LEGO Despicable Me", "LEGO Botanicals", "LEGO Marvel", "LEGO Bluey", "LEGO One Piece"};
@@ -77,7 +82,7 @@ public class LegoCsvBuilderNoDeps {
     private static final Pattern APOSTROPHES_AND_HYPHENS = Pattern.compile("[-‘’'`´–—]");
     private static final Pattern MULTISPACE = Pattern.compile("\\s{2,}");
     private static final Pattern AGE_PLUS = Pattern.compile("(\\d+)\\s*\\+");
-    private static final Pattern EXTRA_NAME_SYMBOLS = Pattern.compile("[:|,“”„ǀ]");
+    private static final Pattern EXTRA_NAME_SYMBOLS = Pattern.compile("[:|,“”„ǀ│]");
 
     // For series matching: normalized (lowercase, no symbols, spaces collapsed) -> preferred
     private static final Map<String, String> SERIES_NORM_TO_PREFERRED = new LinkedHashMap<>();
@@ -103,10 +108,12 @@ public class LegoCsvBuilderNoDeps {
             String newsFrom = fromDate.format(DATE_FMT);
             String newsTo = toDate.format(DATE_FMT);
 
-            try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8); BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8); BufferedWriter bwIndex = Files.newBufferedWriter(indexPath, StandardCharsets.UTF_8)) {
+            try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8);
+                 BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
+                 BufferedWriter bwIndex = Files.newBufferedWriter(indexPath, StandardCharsets.UTF_8)) {
                 // MAIN CSV
                 bw.write("\uFEFF"); // UTF-8 BOM for Excel
-                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact", "product_websites", "nomenclature_number", "base_image", "small_image", "thumbnail_image", "additional_images"};
+                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact", "product_websites", "nomenclature_number", "base_image", "small_image", "thumbnail_image", "additional_images", "visibility", "sex"};
                 writeCsvLine(bw, header);
 
                 // SECOND CSV (IDX_F, IDX_H, IDX_O)
@@ -166,6 +173,11 @@ public class LegoCsvBuilderNoDeps {
                         name = baseName;
                     }
 
+                    String legoCode = safe(row, IDX_F).trim();
+                    if (!legoCode.isEmpty()) {
+                        name += " " + legoCode;
+                    }
+
                     String age = convertAge(safe(row, IDX_M));
                     String lenCm = mmToCmString(safe(row, IDX_S));
                     String widCm = mmToCmString(safe(row, IDX_T));
@@ -176,12 +188,10 @@ public class LegoCsvBuilderNoDeps {
                     String small_image = baseImage;
                     String thumbnail_image = baseImage;
                     String additional_images = joinNonBlank(safe(row, IDX_AD), safe(row, IDX_AE), safe(row, IDX_AF), safe(row, IDX_AG), safe(row, IDX_AH), safe(row, IDX_AI), safe(row, IDX_AJ));
-
-                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, "9999", "0", "simple", "Default", CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT, STORE_ID, legoCodeOut, base_image, small_image, thumbnail_image, additional_images};
+                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, PRICE, PRODUCT_ONLINE, PRODUCT_TYPE, ATTRIBUTE_SET_CODE, CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT, STORE_ID, legoCodeOut, base_image, small_image, thumbnail_image, additional_images, VISIBILITY, SEX};
                     writeCsvLine(bw, out);
                 }
             }
-
             System.out.println("✅ Done. Wrote: " + outputPath.toAbsolutePath());
             System.out.println("✅ Done. Wrote: " + indexPath.toAbsolutePath());
 
@@ -278,7 +288,6 @@ public class LegoCsvBuilderNoDeps {
         return cleanedName;
     }
 
-
     private static String[] parseCsvLine(String line) {
         List<String> out = new ArrayList<>();
         if (line == null) return new String[0];
@@ -315,7 +324,6 @@ public class LegoCsvBuilderNoDeps {
             while ((record = readCsvRecord(br)) != null) {
                 String[] row = parseCsvLine(record);
                 if (row.length == 0) continue;
-
                 if (maybeHeader && looksLikeHeader(row)) {
                     maybeHeader = false;
                     continue;
