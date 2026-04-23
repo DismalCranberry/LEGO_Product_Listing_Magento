@@ -39,8 +39,7 @@ function extractFromBlock(doc, labelP) {
 
     const sides = Array.from(block.children);
     const rightSide = sides.length > 1 ? sides[1] : block;
-    const valuePs = Array.from(rightSide.querySelectorAll("p"))
-        .filter(p => p !== labelP && norm(p.textContent));
+    const valuePs = Array.from(rightSide.querySelectorAll("p")).filter(p => p !== labelP && norm(p.textContent));
 
     if (valuePs.length === 0) {
         let cursor = labelP.nextElementSibling;

@@ -17,7 +17,6 @@ public class LegoCsvBuilderNoDeps {
     private static final String MAGENTO_IMPORT_FILE = "res/magento_import.csv";
     private static final String LEGO_SCRAPE_FILE = "res/lego-scrape.csv";
     private static final String OUTPUT_MAIN_FILE = "results/LEGO_FOR_IMPORT.csv";
-    private static final String OUTPUT_SECOND_FILE = "results/LEGO_SASHO.csv";
 
     private static final int IDX_B = 1; // Bulletpoints
     private static final int IDX_C = 2; // Description
@@ -25,19 +24,10 @@ public class LegoCsvBuilderNoDeps {
     private static final int IDX_F = 5; // Lego code
     private static final int IDX_H = 7; // Name
     private static final int IDX_M = 12; // Age
-    private static final int IDX_O = 14; // Barcode
     private static final int IDX_S = 18; // Length
     private static final int IDX_T = 19; // Width
     private static final int IDX_U = 20; // Height
     private static final int IDX_Y = 24; // Weight
-    private static final int IDX_AC = 28; // Main V29
-    private static final int IDX_AD = 29; // Box & Product V29
-    private static final int IDX_AE = 30; // Build
-    private static final int IDX_AF = 31; // Consumer
-    private static final int IDX_AG = 32; // Environment
-    private static final int IDX_AH = 33; // Product
-    private static final int IDX_AI = 34; // Secondary 01 (No BG)
-    private static final int IDX_AJ = 35; // Secondary 02 (No BG)
 
     // Fixed values
     private static final String CATEGORIES = "Default Category/Меню продукти/Детски играчки/LEGO," + "Default Category," + "Default Category/Меню продукти," + "Default Category/Меню продукти/Детски играчки," + "Default Category/Ново," + "Default Category/Ново/Детски играчки - Ново," + "Default Category/Меню продукти/Детски играчки/Конструктори и мозайки," + "Default Category/Меню продукти/Детски играчки/Конструктори и мозайки/Конструктори";
@@ -98,7 +88,6 @@ public class LegoCsvBuilderNoDeps {
             Path magentoPath = Paths.get(MAGENTO_IMPORT_FILE);
             Path scrapePath = Paths.get(LEGO_SCRAPE_FILE);
             Path outputPath = Paths.get(OUTPUT_MAIN_FILE);
-            Path indexPath = Paths.get(OUTPUT_SECOND_FILE);
 
             Map<String, String> legoToSku = loadLegoToSku(magentoPath);
 
@@ -108,17 +97,11 @@ public class LegoCsvBuilderNoDeps {
             String newsFrom = fromDate.format(DATE_FMT);
             String newsTo = toDate.format(DATE_FMT);
 
-            try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8);
-                 BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
-                 BufferedWriter bwIndex = Files.newBufferedWriter(indexPath, StandardCharsets.UTF_8)) {
+            try (BufferedReader br = Files.newBufferedReader(scrapePath, StandardCharsets.UTF_8); BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
                 // MAIN CSV
                 bw.write("\uFEFF"); // UTF-8 BOM for Excel
-                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact", "product_websites", "nomenclature_number", "base_image", "small_image", "thumbnail_image", "additional_images", "visibility", "sex"};
+                String[] header = new String[]{"sku", "name", "series", "description", "age", "econt_length", "econt_width", "econt_height", "weight", "price", "product_online", "product_type", "attribute_set_code", "categories", "news_from_date", "news_to_date", "manufacturer", "responsible_entity_name", "responsible_entity_address", "responsible_entity_contact", "product_websites", "nomenclature_number", "visibility", "sex"};
                 writeCsvLine(bw, header);
-
-                // SECOND CSV (IDX_F, IDX_H, IDX_O)
-                bwIndex.write("\uFEFF"); // UTF-8 BOM for Excel
-                writeCsvLine(bwIndex, new String[]{"lego_code", "name", "barcode"});
 
                 String record;
                 boolean maybeHeader = true;
@@ -138,12 +121,6 @@ public class LegoCsvBuilderNoDeps {
                     // Required fields for index CSV
                     String legoCodeOut = safe(row, IDX_F).trim();
                     if (legoCodeOut.isEmpty()) continue;
-
-                    String nameOut = cleanName(safe(row, IDX_H)).trim();
-                    String barcodeOut = safe(row, IDX_O).trim();
-
-                    // Write second CSV row (always, if lego code exists)
-                    writeCsvLine(bwIndex, new String[]{legoCodeOut, nameOut, barcodeOut});
 
                     // MAIN output logic (only if SKU exists)
                     String sku = legoToSku.get(legoCodeOut);
@@ -183,17 +160,11 @@ public class LegoCsvBuilderNoDeps {
                     String widCm = mmToCmString(safe(row, IDX_T));
                     String heiCm = mmToCmString(safe(row, IDX_U));
                     String weight = safe(row, IDX_Y);
-                    String baseImage = safe(row, IDX_AC);
-                    String base_image = baseImage;
-                    String small_image = baseImage;
-                    String thumbnail_image = baseImage;
-                    String additional_images = joinNonBlank(safe(row, IDX_AD), safe(row, IDX_AE), safe(row, IDX_AF), safe(row, IDX_AG), safe(row, IDX_AH), safe(row, IDX_AI), safe(row, IDX_AJ));
-                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, PRICE, PRODUCT_ONLINE, PRODUCT_TYPE, ATTRIBUTE_SET_CODE, CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT, STORE_ID, legoCodeOut, base_image, small_image, thumbnail_image, additional_images, VISIBILITY, SEX};
+                    String[] out = new String[]{sku, name, (detectedSeries == null ? "" : detectedSeries), htmlFlat, age, lenCm, widCm, heiCm, weight, PRICE, PRODUCT_ONLINE, PRODUCT_TYPE, ATTRIBUTE_SET_CODE, CATEGORIES, newsFrom, newsTo, MANUFACTURER, RESPONSIBLE_ENTITY_NAME, RESPONSIBLE_ENTITY_ADDRESS, RESPONSIBLE_ENTITY_CONTACT, STORE_ID, legoCodeOut, VISIBILITY, SEX};
                     writeCsvLine(bw, out);
                 }
             }
             System.out.println("✅ Done. Wrote: " + outputPath.toAbsolutePath());
-            System.out.println("✅ Done. Wrote: " + indexPath.toAbsolutePath());
 
         } catch (IOException e) {
             System.err.println("I/O error while processing input: " + e.getMessage());
@@ -440,16 +411,5 @@ public class LegoCsvBuilderNoDeps {
         String key = stripSymbolsAndCollapse(detected).trim();
         String repl = SERIES_OVERRIDES.get(key);
         return (repl != null && !repl.isBlank()) ? repl : detected;
-    }
-
-    private static String joinNonBlank(String... values) {
-        StringBuilder sb = new StringBuilder();
-        for (String v : values) {
-            if (v != null && !v.isBlank()) {
-                if (!sb.isEmpty()) sb.append(",");
-                sb.append(v.trim());
-            }
-        }
-        return sb.toString();
     }
 }

@@ -16,9 +16,8 @@ let running = false;
 let results = [];
 let queue = [];
 
-/* ---------- Fancy gradient button style (kept intact) ---------- */
+/* ---------- Fancy gradient button style ---------- */
 function applyBtnCss(btn, colors = ["#4A00E0", "#8E2DE2"]) {
-    // base button style
     btn.style.cssText += `
     position: relative;
     display: inline-flex;
@@ -35,10 +34,9 @@ function applyBtnCss(btn, colors = ["#4A00E0", "#8E2DE2"]) {
     user-select: none;
     box-shadow: 0 4px 10px rgba(0,0,0,.25);
     transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
-    overflow: hidden; /* <-- important for ripple */
+    overflow: hidden;
   `;
 
-    // hover / press
     btn.onmouseenter = () => {
         if (!btn.disabled) {
             btn.style.transform = "translateY(-2px)";
@@ -91,6 +89,24 @@ function buildUrl(tmpl, id) {
     return String(tmpl).replace(/\{id\}/g, encodeURIComponent(id));
 }
 
+function isExpiredAssetPageUrl(rawUrl) {
+    try {
+        const u = new URL(rawUrl || "");
+        return u.hostname === "lac-bucket-assets-prod.s3.eu-west-1.amazonaws.com";
+    } catch {
+        return false;
+    }
+}
+
+async function getTabUrl(tabId) {
+    try {
+        const tab = await chrome.tabs.get(tabId);
+        return tab?.url || "";
+    } catch {
+        return "";
+    }
+}
+
 /* ---------- Tab + content readiness ---------- */
 function waitForTabComplete(tabId, timeoutMs = 30000, pollMs = 300) {
     const t0 = Date.now();
@@ -108,19 +124,16 @@ function waitForTabComplete(tabId, timeoutMs = 30000, pollMs = 300) {
     });
 }
 
-/* ----- NEW: robust not-found detector (works despite session-specific classes) ----- */
 async function checkNotFound(tabId) {
     try {
         const [res] = await chrome.scripting.executeScript({
             target: {tabId}, func: () => {
                 try {
                     const norm = s => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
-                    // explicit h1 check
                     if (Array.from(document.querySelectorAll("h1")).some(h => norm(h.textContent) === "content could not be found")) {
                         return true;
                     }
-                    // fallback: body text contains the phrase (covers structure shifts)
-                    return document.body && norm(document.body.textContent).includes("content could not be found");
+                    return !!(document.body && norm(document.body.textContent).includes("content could not be found"));
                 } catch {
                     return false;
                 }
@@ -133,18 +146,16 @@ async function checkNotFound(tabId) {
     }
 }
 
-/* ----- NEW: poll until either scraper is ready or not-found appears ----- */
 async function waitUntilReadyOrNotFound(tabId, {
     timeoutMs = 20000, intervalMs = 400, minValued = 2
 } = {}) {
     const t0 = Date.now();
+
     while (Date.now() - t0 < timeoutMs) {
-        // 1) bail out early if the page is the "not found" page
         if (await checkNotFound(tabId)) {
             return {ready: false, notFound: true};
         }
 
-        // 2) otherwise, see if our content script thinks the page is ready
         try {
             const [res] = await chrome.scripting.executeScript({
                 target: {tabId}, func: (min) => {
@@ -157,15 +168,14 @@ async function waitUntilReadyOrNotFound(tabId, {
                     }
                 }, args: [minValued]
             });
+
             if (res && res.result) return {ready: true, notFound: false};
         } catch (e) {
-            // if executeScript fails transiently, keep polling
             logStatus(`readiness poll error: ${e?.message || e}`);
         }
-
         await new Promise(r => setTimeout(r, intervalMs));
     }
-    return {ready: false, notFound: false}; // timed out, but not explicitly not-found
+    return {ready: false, notFound: false};
 }
 
 /* ---------- Scrape ---------- */
@@ -175,7 +185,11 @@ async function scrapeCurrentTab(tabId) {
             target: {tabId}, func: () => {
                 const api = window.__DormantScraper__;
                 if (!api) return null;
-                if (typeof api.run === "function") return api.run();
+
+                if (typeof api.run === "function") {
+                    return api.run();
+                }
+
                 if (typeof api.toJSON === "function") {
                     try {
                         return JSON.parse(api.toJSON());
@@ -186,6 +200,7 @@ async function scrapeCurrentTab(tabId) {
                 return null;
             }
         });
+
         return res ? res.result : null;
     } catch (e) {
         logStatus(`scrape error: ${e?.message || e}`);
@@ -193,13 +208,29 @@ async function scrapeCurrentTab(tabId) {
     }
 }
 
+async function downloadCurrentAssets(tabId) {
+    try {
+        const [res] = await chrome.scripting.executeScript({
+            target: {tabId}, func: async () => {
+                const api = window.__DormantScraper__;
+                if (!api || typeof api.downloadAssets !== "function") {
+                    return {ok: false, error: "downloadAssets API missing"};
+                }
+                return await api.downloadAssets();
+            }
+        });
+
+        return res ? res.result : null;
+    } catch (e) {
+        logStatus(`asset download error: ${e?.message || e}`);
+        return {ok: false, error: e?.message || String(e)};
+    }
+}
+
 /* ---------- Column order for export ---------- */
-// Asset columns pulled from /products/{id}/29/assets
-const ASSET_COLUMNS = ["Main V29","Box & Product V29", "Build", "Consumer", "Environment", "Product", "Secondary 01 (No BG)", "Secondary 02 (No BG)"];
+const OUTPUT_COLUMNS = ["bulletLong", "bulletShort", "description", "header", "name", "productId", "quickView", "shopperName", "titleLong", "titleMedium", "titleShort", "url", "age", "pieces", "pieceBarcode", "dimB_altUoM", "dimB_qty", "dimB_qtyInBU", "dimB_length", "dimB_width", "dimB_height", "dimB_dimUnit", "dimB_volume", "dimB_volumeUnit", "dimB_netWeight", "dimB_grossWeight", "dimB_tareWeight", "dimB_weightUnit"];
 
-const OUTPUT_COLUMNS = ["bulletLong", "bulletShort", "description", "header", "name", "productId", "quickView", "shopperName", "titleLong", "titleMedium", "titleShort", "url", "age", "pieces", "pieceBarcode", "dimB_altUoM", "dimB_qty", "dimB_qtyInBU", "dimB_length", "dimB_width", "dimB_height", "dimB_dimUnit", "dimB_volume", "dimB_volumeUnit", "dimB_netWeight", "dimB_grossWeight", "dimB_tareWeight", "dimB_weightUnit", ...ASSET_COLUMNS];
-
-/* ---------- SpreadsheetML XML (Excel) ---------- */
+/* ---------- SpreadsheetML XML ---------- */
 function _toCellString(v) {
     if (Array.isArray(v)) return v.map(x => (x ?? "")).join(" | ");
     if (v && typeof v === "object") return JSON.stringify(v);
@@ -215,7 +246,6 @@ function _xmlEsc(s) {
         .replace(/'/g, "&apos;");
 }
 
-/* Row 1: headers. Rows 2..N: data mapped by OUTPUT_COLUMNS. */
 function buildXml(records) {
     const p = [];
     p.push(`<?xml version="1.0"?>`);
@@ -226,14 +256,12 @@ function buildXml(records) {
     xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`);
     p.push(`<Worksheet ss:Name="Sheet1"><Table>`);
 
-    // Header row
     p.push(`<Row>`);
     for (const col of OUTPUT_COLUMNS) {
         p.push(`<Cell><Data ss:Type="String">${_xmlEsc(col)}</Data></Cell>`);
     }
     p.push(`</Row>`);
 
-    // Data rows
     for (const rec of records) {
         p.push(`<Row>`);
         for (const col of OUTPUT_COLUMNS) {
@@ -272,11 +300,13 @@ async function step(tabId, tmpl) {
         const {ready: r1, notFound: nf1} = await waitUntilReadyOrNotFound(tabId, {
             timeoutMs: 20000, intervalMs: 400, minValued: 2
         });
+
         if (nf1) {
             logStatus(`Skipping ${id}: content not found at /text`);
             if (running) step(tabId, tmpl);
             return;
         }
+
         if (!r1) logStatus(`Content not ready after 20s for ${id} (/text); proceeding`);
         await new Promise(r => setTimeout(r, 300));
         const textRec = await scrapeCurrentTab(tabId) || {};
@@ -290,16 +320,18 @@ async function step(tabId, tmpl) {
         const {ready: r2, notFound: nf2} = await waitUntilReadyOrNotFound(tabId, {
             timeoutMs: 20000, intervalMs: 400, minValued: 2
         });
+
         let merged = {...textRec};
+
         if (nf2) {
             logStatus(`No /data for ${id}; continuing without age/pieces/dimensions`);
         } else {
             await new Promise(r => setTimeout(r, 300));
             const dataRec = await scrapeCurrentTab(tabId) || {};
-            merged = {...merged, ...dataRec}; // adds age, pieces, and dimB_* if found
+            merged = {...merged, ...dataRec};
         }
 
-        // PHASE 3: /assets (image links)
+        // PHASE 3: /assets
         const assetsUrl = `https://content.lego.com/products/${encodeURIComponent(id)}/29/assets`;
         logStatus(`Loading ${assetsUrl}`);
         await chrome.tabs.update(tabId, {url: assetsUrl});
@@ -307,20 +339,42 @@ async function step(tabId, tmpl) {
         if (!ok3) logStatus(`Timeout waiting for DOM 'complete' for ${id} (/assets)`);
 
         const {ready: r3, notFound: nf3} = await waitUntilReadyOrNotFound(tabId, {
-            timeoutMs: 20000, intervalMs: 400, minValued: 1
+            timeoutMs: 12000, intervalMs: 400, minValued: 1
         });
 
         if (nf3) {
-            logStatus(`No /assets for ${id}; continuing without asset image links`);
+            logStatus(`No /assets for ${id}; continuing without asset downloads`);
         } else {
-            if (!r3) logStatus(`Assets not ready after 20s for ${id} (/assets); proceeding`);
-            await new Promise(r => setTimeout(r, 300));
-            const assetsRec = await scrapeCurrentTab(tabId) || {};
-            merged = {...merged, ...assetsRec}; // adds columns like "Main V29",...
-        }
+            if (!r3) {
+                logStatus(`Assets not marked ready for ${id}; attempting downloads anyway`);
+            }
 
+            await new Promise(r => setTimeout(r, 800));
+
+            const assetResult = await downloadCurrentAssets(tabId) || {};
+            const done = Array.isArray(assetResult.downloaded) ? assetResult.downloaded : [];
+            const failed = Array.isArray(assetResult.failed) ? assetResult.failed : [];
+
+            const currentUrl = await getTabUrl(tabId);
+
+            if (isExpiredAssetPageUrl(currentUrl)) {
+                logStatus(`Assets ${id}: redirected to expired S3 page, skipping to next SKU`);
+                results.push(merged);
+                if (running) step(tabId, tmpl);
+                return;
+            }
+
+            logStatus(`Assets ${id}: downloaded ${done.length}${failed.length ? `, failed ${failed.length}` : ""}`);
+
+            if (done.length) {
+                logStatus(`Downloaded labels: ${done.map(x => `${x.label} [${x.via}]`).join(", ")}`);
+            }
+            if (failed.length) {
+                logStatus(`Failed labels: ${failed.map(x => `${x.label} (${x.reason})`).join(", ")}`);
+            }
+        }
         results.push(merged);
-        logStatus(`Scraped ${id} → fields: ${Object.keys(merged).length} (Age=${merged.age ?? "-"} Pieces=${merged.pieces ?? "-"} DimB LxWxH=${merged.dimB_length ?? "-"}x${merged.dimB_width ?? "-"}x${merged.dimB_height ?? "-"})`);
+        logStatus(`Scraped ${id} → XML fields: ${Object.keys(merged).length} (Age=${merged.age ?? "-"} Pieces=${merged.pieces ?? "-"} DimB LxWxH=${merged.dimB_length ?? "-"}x${merged.dimB_width ?? "-"}x${merged.dimB_height ?? "-"})`);
     } catch (e) {
         logStatus(`Error on ${id}: ${e?.message || String(e)}`);
     }
@@ -330,15 +384,13 @@ async function step(tabId, tmpl) {
 
 /* ---------- Wire up ---------- */
 document.addEventListener("DOMContentLoaded", async () => {
-    // Style buttons (unchanged)
-    applyBtnCss(btnStart, ["#667eea", "#764ba2"]);   // blue → purple
-    applyBtnCss(btnSave, ["#f7971e", "#ffd200"]);   // orange → yellow
-    applyBtnCss(btnStop, ["#d50000", "#00a152"]);   // red gradient
-    applyBtnCss(btnClear, ["#636363", "#a2ab58"]);   // grayish variant
+    applyBtnCss(btnStart, ["#667eea", "#764ba2"]);
+    applyBtnCss(btnSave, ["#f7971e", "#ffd200"]);
+    applyBtnCss(btnStop, ["#d50000", "#00a152"]);
+    applyBtnCss(btnClear, ["#636363", "#a2ab58"]);
 
     [btnStart, btnStop, btnSave, btnClear].forEach(syncBtnDisabledVisual);
 
-    // Restore inputs
     try {
         const {lego_ids, lego_tmpl} = await chrome.storage.local.get(["lego_ids", "lego_tmpl"]);
         if (typeof lego_ids === "string" && lego_ids.trim()) idsEl.value = lego_ids;
@@ -349,8 +401,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     btnClear.addEventListener("click", async () => {
         idsEl.value = "";
         results = [];
+
         try {
-            await chrome.storage.local.set({lego_ids: ""}); // only reset IDs
+            await chrome.storage.local.set({lego_ids: ""});
         } catch {
         }
 
@@ -364,6 +417,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     btnStart.addEventListener("click", async () => {
         const ids = parseIds(idsEl.value);
         const tmpl = String(tmplEl.value || "").trim();
+
         if (!ids.length || !tmpl.includes("{id}")) {
             logStatus("Provide IDs and a URL template containing {id}");
             return;
@@ -400,6 +454,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const blob = new Blob([xml], {type: "application/xml"});
         const url = URL.createObjectURL(blob);
         const filename = `lego-scrape-${new Date().toISOString().replace(/[:.]/g, "-")}.xml`;
+
         try {
             await chrome.downloads.download({url, filename, saveAs: false});
             logStatus(`XML downloaded (${results.length} records)`);
