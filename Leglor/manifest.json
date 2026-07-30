@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dormant LEGO Content Hub",
-  "version": "1.4.1",
+  "version": "1.4.7",
   "action": {
     "default_title": "Hub LEGO content",
     "default_popup": "popup.html",
@@ -24,7 +24,8 @@
     "clipboardWrite"
   ],
   "host_permissions": [
-    "https://content.lego.com/*"
+    "https://content.lego.com/*",
+    "https://lac-bucket-assets-prod.s3.eu-west-1.amazonaws.com/*"
   ],
   "content_scripts": [
     {

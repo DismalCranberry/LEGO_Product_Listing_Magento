@@ -261,8 +261,51 @@
         return isAssetsPage();
     }
 
-    function sleep(ms) {
-        return new Promise(r => setTimeout(r, ms));
+    let activeDownloadController = null;
+
+    function makeAbortError() {
+        try {
+            return new DOMException("Operation cancelled", "AbortError");
+        } catch {
+            const error = new Error("Operation cancelled");
+            error.name = "AbortError";
+            return error;
+        }
+    }
+
+    function isAbortError(error) {
+        return error?.name === "AbortError";
+    }
+
+    function throwIfAborted(signal) {
+        if (signal?.aborted) throw makeAbortError();
+    }
+
+    function sleep(ms, signal = null) {
+        if (signal?.aborted) return Promise.reject(makeAbortError());
+
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                cleanup();
+                resolve();
+            }, ms);
+
+            const onAbort = () => {
+                clearTimeout(timer);
+                cleanup();
+                reject(makeAbortError());
+            };
+
+            const cleanup = () => signal?.removeEventListener("abort", onAbort);
+            signal?.addEventListener("abort", onAbort, {once: true});
+        });
+    }
+
+    function cancelActiveDownloads() {
+        const controller = activeDownloadController;
+        if (!controller || controller.signal.aborted) return false;
+        controller.abort();
+        return true;
     }
 
     function isVisible(el) {
@@ -273,10 +316,12 @@
         return rect.width > 0 && rect.height > 0;
     }
 
-    async function clickElement(el) {
+    async function clickElement(el, signal = null) {
+        throwIfAborted(signal);
         if (!el) return false;
         el.scrollIntoView({block: "center", inline: "center"});
-        await sleep(120);
+        await sleep(120, signal);
+        throwIfAborted(signal);
         // Try to dispatch a real MouseEvent to better simulate a user click
         try {
             const eventOpts = {
@@ -361,12 +406,73 @@
         }) || null;
     }
 
-    function findSizePopover() {
-        return Array.from(document.querySelectorAll(".chakra-popover__content")).find(el => /dimensions/i.test(el.textContent || "")) || null;
+    function getPopoverTrigger(downloadBtn) {
+        if (!downloadBtn) return null;
+        return downloadBtn.closest('[aria-haspopup="dialog"][aria-controls], [id^="popover-trigger-"]');
+    }
+
+    function getControlledPopoverId(downloadBtn) {
+        const trigger = getPopoverTrigger(downloadBtn);
+        return trigger?.getAttribute("aria-controls") || "";
+    }
+
+    function isDimensionsPopover(popover) {
+        return !!popover && /dimensions\s*\(width\s*x\s*height\)|dimensions/i.test(popover.textContent || "");
+    }
+
+    function findSizePopover(controlledId = "") {
+        if (controlledId) {
+            // A popup-enabled download button explicitly identifies its own
+            // popover through aria-controls. Never fall back to another open
+            // popover, because that can click the previous image's Download.
+            const controlled = document.getElementById(controlledId);
+            return isDimensionsPopover(controlled) ? controlled : null;
+        }
+
+        return Array.from(document.querySelectorAll('.chakra-popover__content[role="dialog"], .chakra-popover__content'))
+            .find(el => isDimensionsPopover(el) && isVisible(el)) || null;
+    }
+
+    function findPopoverCloseButton(popover) {
+        if (!popover) return null;
+        return Array.from(popover.querySelectorAll('button[aria-label], button'))
+            .find(btn => keyNorm(btn.getAttribute("aria-label") || "") === "close") || null;
+    }
+
+    async function closeSizePopover(popover, signal = null, timeoutMs = 2000) {
+        throwIfAborted(signal);
+        if (!popover || !document.contains(popover) || !isVisible(popover)) return true;
+
+        const closeBtn = findPopoverCloseButton(popover);
+        if (closeBtn) {
+            await clickElement(closeBtn, signal);
+        } else {
+            // Chakra popovers normally expose the aria-label=Close button.
+            // Escape is only a defensive fallback if the markup changes.
+            document.dispatchEvent(new KeyboardEvent("keydown", {
+                key: "Escape", code: "Escape", keyCode: 27, which: 27, bubbles: true, cancelable: true
+            }));
+        }
+
+        return await waitUntilClosed(popover, timeoutMs, signal);
+    }
+
+    async function closeVisibleSizePopovers(signal = null) {
+        throwIfAborted(signal);
+        const visible = Array.from(document.querySelectorAll('.chakra-popover__content[role="dialog"], .chakra-popover__content'))
+            .filter(el => isDimensionsPopover(el) && isVisible(el));
+
+        for (const popover of visible) {
+            if (!await closeSizePopover(popover, signal)) return false;
+        }
+        return true;
     }
 
     function findPopoverDownloadButton(popover) {
         if (!popover) return null;
+
+        // The icon-only trigger also has aria-label="download", so only search
+        // inside the opened popover and prefer the footer action with text.
         return Array.from(popover.querySelectorAll("button")).find(btn => {
             const text = norm(btn.textContent).toLowerCase().replace(/\s+/g, " ");
             const title = norm(btn.getAttribute("title")).toLowerCase().replace(/\s+/g, " ");
@@ -376,8 +482,8 @@
     }
 
     function findContextMenuDownloadButton() {
-        // Loose fallback in case LEGO uses menu/listbox instead of popover text flow
-        return Array.from(document.querySelectorAll('[role="menu"] button, [role="menuitem"], [role="listbox"] button, [role="dialog"] button'))
+        // Loose fallback in case LEGO uses menu/listbox instead of the dimensions popover.
+        return Array.from(document.querySelectorAll('[role="menu"] button, [role="menuitem"], [role="listbox"] button'))
             .find(btn => {
                 const text = norm(btn.textContent).toLowerCase().replace(/\s+/g, " ");
                 const title = norm(btn.getAttribute("title")).toLowerCase().replace(/\s+/g, " ");
@@ -385,10 +491,17 @@
             }) || null;
     }
 
-    async function waitForFlowAppearance(timeoutMs = 5000) {
+    async function waitForFlowAppearance({
+                                             controlledPopoverId = "",
+                                             popupExpected = false,
+                                             timeoutMs = 5000,
+                                             directGraceMs = 700,
+                                             signal = null
+                                         } = {}) {
         const start = Date.now();
 
         while (Date.now() - start < timeoutMs) {
+            throwIfAborted(signal);
             if (!onAssetsPageNow()) {
                 return {type: "navigated-away"};
             }
@@ -398,7 +511,7 @@
                 return {type: "confidential-modal", element: modal};
             }
 
-            const popover = findSizePopover();
+            const popover = findSizePopover(controlledPopoverId);
             if (popover && isVisible(popover)) {
                 return {type: "size-popover", element: popover};
             }
@@ -407,59 +520,104 @@
             if (menuBtn && isVisible(menuBtn)) {
                 return {type: "context-download", element: menuBtn};
             }
-            await sleep(150);
+
+            // A plain button (no aria-haspopup/aria-controls wrapper) downloads
+            // immediately. Do not make every direct image wait five seconds.
+            if (!popupExpected && Date.now() - start >= directGraceMs) {
+                return {type: "direct-download"};
+            }
+
+            await sleep(100, signal);
         }
-        return {type: "direct-download"};
+
+        // When the DOM explicitly says this is a popover trigger, timing out is
+        // an error rather than silently assuming a direct download happened.
+        return popupExpected ? {type: "popover-not-opened"} : {type: "direct-download"};
     }
 
-    async function waitUntilClosed(target, timeoutMs = 5000) {
+    async function acceptConfidentialDownload(modal, signal = null) {
+        throwIfAborted(signal);
+        const acceptBtn = findAcceptAndDownloadButton(modal);
+        if (!acceptBtn) {
+            return {ok: false, reason: "accept-download-button-not-found"};
+        }
+
+        await clickElement(acceptBtn, signal);
+        await waitUntilClosed(modal, 5000, signal);
+        await sleep(1200, signal);
+
+        if (!onAssetsPageNow()) {
+            return {ok: false, reason: "navigated-away-after-confidential-accept"};
+        }
+        return {ok: true};
+    }
+
+    async function waitForConfidentialAfterAction(timeoutMs = 1500, signal = null) {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
+            throwIfAborted(signal);
+            const modal = findConfidentialModal();
+            if (modal && isVisible(modal)) return modal;
+            if (!onAssetsPageNow()) return null;
+            await sleep(100, signal);
+        }
+        return null;
+    }
+
+    async function waitUntilClosed(target, timeoutMs = 5000, signal = null) {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            throwIfAborted(signal);
             if (!target || !document.contains(target) || !isVisible(target)) {
                 return true;
             }
             if (!onAssetsPageNow()) {
                 return false;
             }
-            await sleep(150);
+            await sleep(150, signal);
         }
         return false;
     }
 
-    async function handleSingleDownloadFlow(card) {
+    async function handleSingleDownloadFlow(card, signal = null) {
+        throwIfAborted(signal);
         if (!onAssetsPageNow()) {
             return {ok: false, reason: "left-assets-page-before-click"};
         }
 
-        const btn = card.downloadBtn || findAssetDownloadButton(card.root);
+        // A dimensions popup can remain mounted and visible after its Download
+        // action. Close every stale popup before resolving/clicking the next card.
+        // If cleanup fails, stop rather than risk downloading the old image again.
+        if (!await closeVisibleSizePopovers(signal)) {
+            return {ok: false, fatal: true, reason: "stale-size-popover-could-not-close"};
+        }
+
+        const cachedBtn = card.downloadBtn;
+        const btn = cachedBtn?.isConnected ? cachedBtn : findAssetDownloadButton(card.root);
         if (!btn) {
             return {ok: false, reason: "download-button-not-found"};
         }
 
-        await clickElement(btn);
+        const controlledPopoverId = getControlledPopoverId(btn);
+        const popupExpected = !!getPopoverTrigger(btn);
 
-        const flow = await waitForFlowAppearance(5000);
+        await clickElement(btn, signal);
+
+        const flow = await waitForFlowAppearance({
+            controlledPopoverId, popupExpected, timeoutMs: popupExpected ? 5000 : 1400, directGraceMs: 700, signal
+        });
 
         if (flow.type === "navigated-away") {
             return {ok: false, reason: "navigated-away-after-first-click"};
         }
 
+        if (flow.type === "popover-not-opened") {
+            return {ok: false, reason: "size-popover-not-opened"};
+        }
+
         if (flow.type === "confidential-modal") {
-            const acceptBtn = findAcceptAndDownloadButton(flow.element);
-            if (!acceptBtn) {
-                return {ok: false, reason: "accept-download-button-not-found"};
-            }
-
-            await clickElement(acceptBtn);
-
-            // Wait for modal to close or just cooldown if it remains mounted invisibly
-            await waitUntilClosed(flow.element, 5000);
-            await sleep(1200);
-
-            if (!onAssetsPageNow()) {
-                return {ok: false, reason: "navigated-away-after-confidential-accept"};
-            }
-            return {ok: true, via: "confidential-modal"};
+            const accepted = await acceptConfidentialDownload(flow.element, signal);
+            return accepted.ok ? {ok: true, via: "confidential-modal"} : accepted;
         }
 
         if (flow.type === "size-popover") {
@@ -468,9 +626,26 @@
                 return {ok: false, reason: "popover-download-button-not-found"};
             }
 
-            await clickElement(popBtn);
-            await waitUntilClosed(flow.element, 5000);
-            await sleep(1200);
+            await clickElement(popBtn, signal);
+
+            // The site does not consistently dismiss this widget after its
+            // Download action. Explicitly press its aria-label=Close button so
+            // the next card cannot reuse this popup and download the old image.
+            await sleep(150, signal);
+            const popoverClosed = await closeSizePopover(flow.element, signal);
+            if (!popoverClosed) {
+                return {ok: false, fatal: true, reason: "size-popover-could-not-close-after-download"};
+            }
+
+            // Some assets can chain the dimensions popover into the existing
+            // confidential-content confirmation dialog.
+            const chainedModal = await waitForConfidentialAfterAction(1500, signal);
+            if (chainedModal) {
+                const accepted = await acceptConfidentialDownload(chainedModal, signal);
+                return accepted.ok ? {ok: true, via: "size-popover+confidential-modal"} : accepted;
+            }
+
+            await sleep(1200, signal);
 
             if (!onAssetsPageNow()) {
                 return {ok: false, reason: "navigated-away-after-size-popover"};
@@ -479,8 +654,15 @@
         }
 
         if (flow.type === "context-download") {
-            await clickElement(flow.element);
-            await sleep(1200);
+            await clickElement(flow.element, signal);
+
+            const chainedModal = await waitForConfidentialAfterAction(1500, signal);
+            if (chainedModal) {
+                const accepted = await acceptConfidentialDownload(chainedModal, signal);
+                return accepted.ok ? {ok: true, via: "context-menu+confidential-modal"} : accepted;
+            }
+
+            await sleep(1200, signal);
 
             if (!onAssetsPageNow()) {
                 return {ok: false, reason: "navigated-away-after-context-download"};
@@ -488,8 +670,8 @@
             return {ok: true, via: "context-menu"};
         }
 
-        // direct download path: no extra UI appeared
-        await sleep(1200);
+        // Plain button path: the first click already started the download.
+        await sleep(1200, signal);
 
         if (!onAssetsPageNow()) {
             return {ok: false, reason: "navigated-away-after-direct-click"};
@@ -502,40 +684,116 @@
             return {ok: false, error: "not-assets-page", downloaded: [], failed: []};
         }
 
+        // Only one asset run may be active. Starting a new one cancels any stale run.
+        cancelActiveDownloads();
+        const controller = new AbortController();
+        activeDownloadController = controller;
+        const {signal} = controller;
+
         const cards = collectAssetCards() || [];
         const downloaded = [];
         const failed = [];
 
-        for (const card of cards) {
-            try {
-                const result = await handleSingleDownloadFlow(card);
+        try {
+            for (const card of cards) {
+                throwIfAborted(signal);
 
-                if (result.ok) {
-                    downloaded.push({label: card.label, via: result.via});
-                } else {
-                    failed.push({label: card.label, reason: result.reason || "download-failed"});
+                try {
+                    const result = await handleSingleDownloadFlow(card, signal);
 
-                    // If we left the assets page, stop immediately.
+                    if (result.ok) {
+                        downloaded.push({label: card.label, via: result.via});
+                    } else {
+                        failed.push({label: card.label, reason: result.reason || "download-failed"});
+
+                        // Popup cleanup failures are fatal: continuing could click
+                        // a stale popup and download the previous image again.
+                        if (result.fatal || !onAssetsPageNow()) break;
+                    }
+
+                    // Abortable gap before the next asset so flows do not overlap.
+                    await sleep(900, signal);
+                } catch (error) {
+                    if (isAbortError(error)) throw error;
+
+                    failed.push({label: card.label, reason: String(error)});
                     if (!onAssetsPageNow()) break;
+                    await sleep(900, signal);
                 }
+            }
 
-                // Small gap before the next asset so flows do not overlap
-                await sleep(900);
-            } catch (e) {
-                failed.push({label: card.label, reason: String(e)});
-                if (!onAssetsPageNow()) break;
-                await sleep(900);
+            return {
+                ok: true,
+                productId: extractProductIdFromURL(location.href),
+                url: location.href,
+                found: cards.length,
+                downloaded,
+                failed
+            };
+        } catch (error) {
+            if (!isAbortError(error)) throw error;
+
+            return {
+                ok: false,
+                stopped: true,
+                error: "cancelled",
+                productId: extractProductIdFromURL(location.href),
+                url: location.href,
+                found: cards.length,
+                downloaded,
+                failed
+            };
+        } finally {
+            if (activeDownloadController === controller) {
+                activeDownloadController = null;
             }
         }
+    }
 
-        return {
-            ok: true,
-            productId: extractProductIdFromURL(location.href),
-            url: location.href,
-            found: cards.length,
-            downloaded,
-            failed
-        };
+
+    function getAssetPlan() {
+        if (!isAssetsPage()) return [];
+        return (collectAssetCards() || []).map((card, index) => ({
+            index, label: card.label
+        }));
+    }
+
+    async function downloadSingleAsset(requestedLabel) {
+        if (!isAssetsPage()) {
+            return {ok: false, error: "not-assets-page", label: requestedLabel || ""};
+        }
+
+        // Each popup-side request owns one abort controller. This lets Stop
+        // interrupt the currently active image without losing the outer plan.
+        cancelActiveDownloads();
+        const controller = new AbortController();
+        activeDownloadController = controller;
+        const {signal} = controller;
+
+        const cards = collectAssetCards() || [];
+        const wanted = keyNorm(requestedLabel || "");
+        const card = cards.find(item => keyNorm(item.label) === wanted);
+
+        if (!card) {
+            if (activeDownloadController === controller) activeDownloadController = null;
+            return {
+                ok: false, label: requestedLabel || "", reason: "asset-card-not-found", found: cards.length
+            };
+        }
+
+        try {
+            const result = await handleSingleDownloadFlow(card, signal);
+            return Object.assign({label: card.label, found: cards.length}, result);
+        } catch (error) {
+            if (!isAbortError(error)) throw error;
+            return {
+                ok: false, stopped: true, error: "cancelled", label: card.label, found: cards.length
+            };
+        } finally {
+            if (activeDownloadController === controller) {
+                activeDownloadController = null;
+            }
+        }
     }
 
     function collect() {
@@ -583,14 +841,27 @@
         return {found, valued};
     }
 
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (message?.type !== "DORMANT_CANCEL_DOWNLOADS") return;
+
+        sendResponse({ok: true, cancelled: cancelActiveDownloads()});
+        return false;
+    });
+
     window.__DormantScraper__ = Object.freeze({
-        downloadAssets: () => downloadAllAssets(), run: () => {
+        assetPlan: () => getAssetPlan(),
+        downloadAsset: (label) => downloadSingleAsset(label),
+        downloadAssets: () => downloadAllAssets(),
+        cancelDownloads: () => cancelActiveDownloads(),
+        run: () => {
             forceStandardTabNow();
             return collect();
-        }, toJSON: () => {
+        },
+        toJSON: () => {
             forceStandardTabNow();
             return JSON.stringify(collect(), null, 2);
-        }, copy: async () => {
+        },
+        copy: async () => {
             forceStandardTabNow();
             const json = JSON.stringify(collect(), null, 2);
             try {
@@ -598,10 +869,13 @@
             } catch {
             }
             return json;
-        }, log: () => {
+        },
+        log: () => {
             forceStandardTabNow();
             console.log(collect());
-        }, ready: () => ready(), isReady: (minValued = 2) => {
+        },
+        ready: () => ready(),
+        isReady: (minValued = 2) => {
             try {
                 const {valued} = ready();
                 return valued >= (Number(minValued) || 2);

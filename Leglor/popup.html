@@ -8,7 +8,7 @@
         body {
             font-family: monospace;
             margin: 10px;
-            width: 340px;
+            width: 380px;
             background: #fafafa;
             color: #222;
         }
@@ -22,6 +22,29 @@
         textarea {
             height: 60px;
             resize: vertical;
+        }
+
+        .start-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .start-grid button {
+            width: 100%;
+            margin: 0;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 2px;
+        }
+
+        .controls button {
+            margin-right: 0;
         }
 
         #status {
@@ -47,17 +70,23 @@
 <h3>Dormant LEGO Scraper</h3>
 
 <label>Product IDs (comma or space separated):</label>
-<textarea id="ids" placeholder="1234, 5678, 9012"></textarea>
+<label for="ids"></label><textarea id="ids" placeholder="1234, 5678, 9012"></textarea>
 
-<label>URL template (use {id}):</label>
-<input id="tmpl" type="text" placeholder="https://content.lego.com/api/products/{id}"/>
+<div class="start-grid">
+    <button id="start-all">Get Data + Images</button>
+    <button id="start-data">Get Data Only</button>
+    <button id="start-images">Get Images Only</button>
+</div>
 
-<div>
-    <button id="start">Start</button>
+<div class="controls">
     <button id="stop" disabled>Stop</button>
-    <button id="save">Save XML</button>
+    <button id="save" disabled>Save XML</button>
     <button id="clear">Clear Input</button>
 </div>
+
+<p style="font: 11px/1.35 system-ui, sans-serif; color: #555; margin: 7px 0 0;">
+    Runs continue in the background after this panel is closed. Reopen it to view progress or stop the run.
+</p>
 
 <div id="status"></div>
 
